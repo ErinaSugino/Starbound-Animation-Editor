@@ -25,3 +25,7 @@ Currently supported features:
 
 Currently **not** supported features:
 - Light sources (missing information)
+
+## Preview and Usage
+The current build can be tested and the application seen in action at [this GitHub page](https://erinasugino.github.io/Starbound-Animation-Editor/).
+Stable releases for public use can be found in the [Release section](/../../releases).
