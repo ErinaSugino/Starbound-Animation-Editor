@@ -12,7 +12,7 @@ One: I'm primarily a web-developer and working with JavaScript and co. is just s
 Two: Instead of having a compiled program that you need to run, a web-application like this one is available to anyone who has a modern browser with no further dependencies required - something anyone actually planning on working with animations in Starbound should have at least one of in the first place. No matter if run offline on your Desktop or via a remote webserver, it's as simple as can be.
 
 ## Features
-The `Starbound Animation Editor` supports every feature Starbound itself accepts in an animation file, *based off of my own reverse engineering from what works in official game assets and other projects.* If there is anything not yet supported or a misunderstanding in how things work, create an [Issue](/issues) to let me know.
+The `Starbound Animation Editor` supports every feature Starbound itself accepts in an animation file, *based off of my own reverse engineering from what works in official game assets and other projects.* If there is anything not yet supported or a misunderstanding in how things work, create an [Issue](/../../issues) to let me know.
 
 Currently supported features:
 - Global Tags
