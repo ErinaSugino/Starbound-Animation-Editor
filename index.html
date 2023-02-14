@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SxB Animation file creator</title>
+<script>
+window.onError = function(msg, url, line, col, err) {
+	if(ToastModal) ToastModal.open("Critical Error", true)
+	console.error("Uncaught Error:", url, "At "+line+":"+col, err);
+	return true;
+}
+</script>
+<script src="animator_classes.js"></script>
+<script src="animator.js"></script>
+<script src="ui.js"></script>
+<script src="misc.js"></script>
+<script src="defer.js" defer></script>
+<link rel="stylesheet" href="animator.css" />
+</head>
+<body>
+<div class="body" id="main">
+	<div class="layout_main">
+		<div class="header">
+			Starbound Animation Editor
+		</div>
+		<div class="content page_width">
+			<div class="navigation" id="navigation">
+				<div class="tab_header" data-for="tags">Tags</div>
+				<div class="tab_header" data-for="parts">Parts</div>
+				<div class="tab_header" data-for="states">States</div>
+				<div class="tab_header" data-for="particles">Particles</div>
+				<div class="tab_header" data-for="groups">Groups</div>
+				<div class="tab_header" data-for="sounds">Sounds</div>
+				<div class="tab_header active" data-for="preview">Preview</div>
+				<div class="filler"></div>
+			</div>
+			<div class="tabs">
+				<div class="tab" id="tags">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						<div class="tags"></div>
+						<div class="warning">No global tags defined.</div>
+						<div class="sticky_controls">
+							<button class="modern tiny" type="button" title="Add new tag" data-action="addTag">+</button>
+						</div>
+					</div>
+				</div>
+				<div class="tab" id="parts">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						Parts
+					</div>
+				</div>
+				<div class="tab" id="states">
+					<div class="navbar"></div>
+					<div class="tab_content"></div>
+				</div>
+				<div class="tab" id="particles">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						Particles
+					</div>
+				</div>
+				<div class="tab" id="groups">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						<div class="groups"></div>
+						<div class="warning">No transformation groups defined.</div>
+						<div class="sticky_controls">
+							<button class="modern tiny" type="button" title="Add new group" data-action="addGroup">+</button>
+						</div>
+					</div>
+				</div>
+				<div class="tab" id="sounds">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						<div class="sounds"></div>
+						<div class="warning">No sound pools defined.</div>
+						<div class="sticky_controls">
+							<button class="modern tiny" type="button" title="Add new pool" data-action="addPool">+</button>
+						</div>
+					</div>
+				</div>
+				<div class="tab active" id="preview">
+					<div class="navbar"></div>
+					<div class="tab_content">
+						<pre></pre>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="footer">
+			&copy; Erina Sugino - 2023
+		</div>
+	</div>
+	
+	<div class="sidebar" id="menu">
+		<div class="bookmark" id="menu_icon" onclick="document.getElementById('menu').classList.toggle('active');">☰</div>
+		<div class="menu_content">
+			<div class="box">
+				<label class="title">Color Scheme</label>
+				<div class="darkmode_icon light"></div>
+				<label class="switch" for="darkmode" title="Switch darkmode">
+					<input type="checkbox" class="checkbox" id="darkmode" value="1" />
+					<span class="slider round"></span>
+				</label>
+				<div class="darkmode_icon dark"></div>
+			</div>
+			<hr>
+			<div class="box">
+				<button id="newProjectButton" class="modern large" type="button" title="Start new&#10;empty project">New Project</button><br>
+				<button id="importButton" class="modern large" type="button" title="Import project from&#10; .animation file">Import</button><br>
+				<button id="exportButton" class="modern large" type="button" title="Save current project&#10;as new .animation file">Export</button>
+			</div>
+			<hr>
+			<div class="box">
+				<label class="title">Output Format</label>
+				<select class="modern large" id="compressionLevel" title="Minification settings&#10;for output">
+					<option value="0" title="Human readable&#10;pretty print">Pretty</option>
+					<option value="1" title="Human readable with&#10;minified parts">Optimized</option>
+					<option value="2" title="Minified JSON without&#10;white-spaces">Production</option>
+				</select>
+			</div>
+		</div>
+	</div>
+</div>
+</body>
+</html>
