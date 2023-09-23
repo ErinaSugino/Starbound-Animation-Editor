@@ -10,6 +10,10 @@ div.body {min-height: 100vh; height: 100%; transition: background-color 0.3s eas
 div.body > * {font-size: initial;}
 
 .no_transition {transition: none !important;}
+.R {float: right;}
+.L {float: left;}
+.CR {clear: right;}
+.CL {clear: left;}
 
 div.body {
 	--bg_color_transp: rgba(255,255,255,0.5);
@@ -116,6 +120,17 @@ div.sidebar hr {margin: 25px 0px; border-color: var(--hr_color); border-radius: 
 label.title {font-weight: 800; margin: 10px 0px; display: block; text-align: center; font-size: 18px; font-family: 'Open Sans'; font-variant: small-caps;}
 
 input.checkbox {position: absolute; opacity: 0 !important; pointer-events: none !important;}
+label.checkbox {position: relative; margin: 4px 0px 4px 30px; display: inline-block; vertical-align: middle;}
+label.checkbox:empty {padding-right: 20px; margin: 6px 0px; vertical-align: initial;}
+label.checkbox::before {position:absolute;width:16px;height:16px;top:50%;left:-30px;transform:translateY(-50%);content: '';border:2px solid grey;transition:border-color 0.3s ease, background-color 0.3s ease;cursor:pointer;}
+label.checkbox:empty::before {left: 0px;}
+label.checkbox::after {position:absolute;width:14px;height: 7px;top:calc(50% - 1px);left:-34px;border-left:3px solid #29b530;border-bottom:3px solid #29b530;content:'';transform:translate(50%, -50%) rotate(-45deg);box-sizing:border-box;border-radius:2px;opacity:0;transition: opacity 0.3s ease;pointer-events:none;}
+label.checkbox:empty::after {left: -4px;}
+input.checkbox:enabled:checked + label.checkbox::before, input.checkbox:enabled + label.checkbox:hover::before {background-color: var(--bg_color_hover);}
+input.checkbox:enabled:checked + label.checkbox::after {opacity: 1;}
+input.checkbox:enabled:focus + label.checkbox::before {border-color: deepskyblue !important;}
+input.checkbox:disabled + label.checkbox::before {background-color: grey !important; background: radial-gradient(transparent 8px,dark_gray 7px),linear-gradient(45deg,transparent 45%,grey 45%,grey 55%,transparent 55%),linear-gradient(-45deg,transparent 45%,grey 45%,gery 55%,transparent 55%),linear-gradient(0deg,dark_gray 0%,dark_gray 100%); cursor: not-allowed;}
+label.checkblock {display: inline-block; width: 20px;}
 
 .switch {position: relative;display: inline-block;width: 40px;height: 20px;}
 .slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: #ccc;-webkit-transition: .4s;transition: .4s;}
@@ -222,13 +237,17 @@ input.fileInput + label {
 input.fileInput:invalid + label {display: initial;}
 
 input.textfield, select.modern {border: 2px solid lightgrey; font-size: 16px; padding: 0px 10px; height: 26px; transition: border-color 0.3s ease; font-family: 'Open Sans'; background-color: var(--bg_color); color: inherit;}
+input.textfield {appearance: textfield}
 input.textfield:focus, select.modern:focus {border-color: var(--highlight-color) !important; outline: 0;}
 input.textfield:disabled, input.textfield:read-only, input.textfield:-moz-read-only, input.textfield:disabled:focus, input.textfield:read-only:focus, input.textfield:-moz-read-only:focus {background-color: var(--bg_color_disab);}
 input.textfield:-webkit-autofill {box-shadow: 0px 0px 0px 30px white inset;}
+input.textfield.tiny {width: 50px;}
+input.textfield.medium {width: 250px;}
 input.textfield.large {width: calc(100% - 24px);}
 
 select.modern {box-sizing: content-box; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url(modern_select.png); background-repeat: no-repeat; background-position: right; cursor: pointer;}
 select.modern:disabled, select.modern:disabled:focus {background-color: var(--bg_color_disab);}
+select.modern.medium {width: 250px;}
 select.modern.large {width: calc(100% - 24px);}
 
 .full_width {width: 100%; min-width: 800px;}
@@ -264,7 +283,7 @@ span.json_key {color: var(--json_key_color);}
 span.json_number {color: var(--json_number_color)}
 span.json_expression {color: var(--json_expression_color)}
 
-div.tags:not(:empty) + div.warning, div.sounds:not(:empty) + div.warning, div.groups:not(:empty) + div.warning, div.states:not(:empty) + div.warning {display: none;}
+div.tags:not(:empty)+div.warning,div.sounds:not(:empty)+div.warning,div.groups:not(:empty)+div.warning,div.states:not(:empty)+div.warning,div.emitters:not(:empty)+div.warning,div.particles:not(:empty)+div.warning,div.variances:not(:empty)+div.warning{display: none;}
 div.warning {text-align: center; font-weight: bold;}
 
 div.back_button {cursor: pointer; display: inline-block; width: 30px; height: 30px; line-height: 28px; text-align: center; box-sizing: border-box; border: 1px solid lightgrey; border-radius: 5px; margin-right: 15px; user-select: none; transition: background-color 0.3s ease;}
@@ -274,8 +293,8 @@ div.nav_element {cursor: pointer; box-sizing: border-box; border: 1px solid ligh
 div.nav_element:not(.current):hover {background-color: var(--bg_color_hover);}
 div.nav_element.current {background-color: var(--bg_color_hover); cursor: initial;}
 
-div.tag, div.pool, div.group, div.stateType {display: flex; flex-direction: row; box-sizing: border-box; border: 1px solid lightgrey; width: 100%;}
-div.tag:nth-of-type(n+2), div.pool:nth-of-type(n+2), div.group:nth-of-type(n+2), div.stateType:nth-of-type(n+2) {margin-top: 5px;}
+div.tag, div.pool, div.group, div.stateType, div.emitter {display: flex; flex-direction: row; box-sizing: border-box; border: 1px solid lightgrey; width: 100%;}
+div.tag:nth-of-type(n+2), div.pool:nth-of-type(n+2), div.group:nth-of-type(n+2), div.stateType:nth-of-type(n+2), div.emitter:nth-of-type(n+2) {margin-top: 5px;}
 div.cell {box-sizing: border-box; padding: 5px 5px;}
 div.cell.grow {flex-grow: 1; max-width: unset !important;}
 div.cell.hover {opacity: 0; transition: opacity 0.3s ease;}
@@ -301,20 +320,49 @@ div.group > .cell:nth-of-type(1) {font-weight: bold; max-width: 300px; overflow-
 div.group > .cell:nth-of-type(2) {padding-right: 10px;}
 div.group > .cell:nth-of-type(2) > label {vertical-align: bottom;}
 
-div.stateType > .cell:nth-of-type(1) {width: 30px; height: 30px; position: relative;}
-div.stateType > .cell:nth-of-type(1):after {content: ">"; position: absolute; top: 0px; left: 0px; bottom: 0px; right: 0px; font-size: 24px; font-weight: bold; text-align: center; line-height: 30px; cursor: pointer;}
-div.stateType.open > .cell:nth-of-type(1):after {transform: rotate(90deg);}
-div.stateType > .cell:nth-of-type(2) {font-weight: bold; max-width: 300px; overflow-wrap: break-word; color: var(--json_key_color);}
-div.stateType > .cell:nth-of-type(3) {padding-right: 10px;}
-div.stateType:not(.open) > .cell:nth-of-type(3) {color: var(--bg_color_placeh);}
+div.stateType > .cell:nth-of-type(1) {font-weight: bold; max-width: 300px; overflow-wrap: break-word; color: var(--json_key_color);}
+div.stateType > .cell:nth-of-type(2) {padding-right: 10px;}
+div.stateType:not(.open) > .cell:nth-of-type(2) {color: var(--bg_color_placeh);}
+div.stateType > .cell:nth-of-type(3) > button {vertical-align: middle;}
+div.stateType > .cell:nth-of-type(3) > button:nth-of-type(n+2) {margin-left: 5px;}
 
-div.state {display: flex; flex-direction: row; box-sizing: border-box; width: 100%;}
-div.state:nth-of-type(n+2) {margin-top: 10px;}
+div.state {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 15px; padding-top: 5px;}
+div.state:nth-of-type(n+2) {padding-top: 4px; border-top: 1px solid grey;}
+div.state:nth-last-of-type(n+2) {padding-bottom: 4px;}
 div.state > .cell:not(.controls) {padding: 0px 5px;}
 div.state > .cell:nth-of-type(1) {text-align: left; font-weight: bold;}
 div.state > .cell:nth-of-type(2) {padding-right: 10px;}
 div.state > .cell:nth-of-type(3) > button {vertical-align: middle;}
 div.state > .cell:nth-of-type(3) > button:nth-of-type(n+2) {margin-left: 5px;}
+
+div.emitter > .cell:nth-of-type(1) {font-weight: bold; max-width: 300px; overflow-wrap: break-word; color: var(--json_key_color);}
+div.emitter > .cell:nth-of-type(2) {padding-right: 10px;}
+div.emitter > .cell:nth-of-type(3) > button {vertical-align: middle;}
+div.emitter > .cell:nth-of-type(3) > button:nth-of-type(n+2) {margin-left: 5px;}
+
+div.particle {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 15px; padding-top: 5px;}
+div.particle:nth-of-type(n+2) {padding-top: 4px; border-top: 1px solid grey;}
+div.particle:nth-last-of-type(n+2) {padding-bottom: 4px;}
+div.particle > .cell:nth-of-type(1) {padding-right: 5px; font-weight: bold; max-width: 300px; overflow-wrap: break-word; color: var(--json_key_color);}
+div.particle > .cell:nth-of-type(2) {padding-right: 10px;}
+div.particle > .cell:nth-of-type(3) > button {vertical-align: middle;}
+div.particle > .cell:nth-of-type(3) > button:nth-of-type(n+2) {margin-left: 5px;}
+
+div.variance {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 23px;}
+div.variance:nth-of-type(n+2) {margin-top: 5px;}
+div.variance > .cell:nth-of-type(1) {padding-right: 10px;}
+div.variance > .cell:nth-of-type(2) {padding-right: 0px;}
+
+div.row:nth-of-type(n+2) {margin-top: 5px;}
+div.row:empty, div.row.hidden {display: none;}
+label.description {display: inline-block; width: 150px; margin-right: 15px; font-weight: bold;}
+
+div.indicator {height: 30px; width: 30px; margin-right: 5px; position: relative; display: inline-block;}
+div.indicator:after {content: ">"; position: absolute; top: 0px; left: 0px; bottom: 0px; right: 0px; font-size: 24px; font-weight: bold; text-align: center; line-height: 28px; cursor: pointer;}
+div.expandable {height: 30px; display: flex; flex-direction: row;}
+div.expandable.open > .indicator:after {transform: rotate(90deg);}
+div.expandable:not(.open) + div {display: none;}
+div.expandable > label {line-height: 30px;}
 
 div.sticky_controls {text-align: right; position: sticky; bottom: 0px; padding: 5px 0px; margin-top: 10px; background-color: var(--bg_color_content);}
 div.non_sticky_controls {text-align: right; padding: 5px 10px; margin-top: 10px; background-color: var(--bg_color_content);}
@@ -357,7 +405,7 @@ div.non_sticky_controls {text-align: right; padding: 5px 10px; margin-top: 10px;
 	background-color: var(--modal_title_color);
 	color: white;
 	font-weight: 800;
-	font-family: 'Open Sans';
+	font-family: 'Audiowide', 'Open Sans';
 	font-size: 22px;
 	font-variant: small-caps;
 	line-height: 50px;
@@ -410,3 +458,5 @@ a.modern:hover:after {max-width: 100%;}
 a.blue {color: deepskyblue; text-decoration-color: deepskyblue; transition: color 0.3s ease;}
 a.blue:hover:not(.modern) {color: lightblue;}
 a.blue:after {background-color: deepskyblue;}
+
+span.highlight {font-weight: bold; color: deepskyblue;}

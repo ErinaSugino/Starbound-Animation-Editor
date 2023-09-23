@@ -57,9 +57,7 @@ window.onError = function(msg, url, line, col, err) {
 				</div>
 				<div class="tab" id="particles">
 					<div class="navbar"></div>
-					<div class="tab_content">
-						Particles
-					</div>
+					<div class="tab_content"></div>
 				</div>
 				<div class="tab" id="groups">
 					<div class="navbar"></div>
@@ -90,7 +88,8 @@ window.onError = function(msg, url, line, col, err) {
 			</div>
 		</div>
 		<div class="footer">
-			&copy; Erina Sugino - 2023
+			&copy; Erina Sugino - 2023<br>
+			<a class="modern blue" href="javascript:openHelp();">Help</a>
 		</div>
 	</div>
 	
@@ -124,5 +123,208 @@ window.onError = function(msg, url, line, col, err) {
 		</div>
 	</div>
 </div>
+
+<template id="fragment_stateType">
+<div>
+	<div class="row">
+		<label class="description">Default:</label><select id="default" class="modern medium"></select>
+	</div>
+	<div class="row">
+		<label class="description">Properties:</label>
+		<div id="properties"></div>
+	</div>
+	<div class="row">
+		<div class="expandable">
+			<div class="indicator"></div><label class="description" style="flex-grow: 1;">States:</label><label id="statecount">0 States</label>
+		</div>
+		<div>
+			<div id="states" class="states"></div>
+			<div class="warning">No states defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addState" title="Add new state&#10;to this pool">+</button></div>
+		</div>
+	</div>
+</div>
+</template>
+<template id="fragment_state">
+<div>
+	<div class="row">
+		<label class="description">Frames:</label><input id="frames" type="number" class="textfield medium" min="1" step="1" max="999" placeholder="Frames" title="Frame count\nof this animation" />
+	</div>
+	<div class="row">
+		<label class="description">Cycle:</label><input id="cycle" type="number" class="textfield medium" min="0.1" step="0.1" max="99.9" placeholder="Cycle" title="Cycle length\nof this animation" />
+	</div>
+	<div class="row">
+		<label class="description">Mode:</label><select id="mode" class="modern medium"></select>
+	</div>
+	<div class="row" id="mode_content"></div>
+	<div class="row">
+		<label class="description">Properties:</label>
+	</div>
+	<div class="row">
+		<label class="description">Frame Properties:</label>
+	</div>
+</div>
+</template>
+<template id="fragment_emitter">
+<div>
+	<div class="row">
+		<label class="description">Burst Count:</label>
+		<input type="number" class="textfield tiny" id="burstcount" min="0" max="99" step="1" placeholder="Burst" title="Burst Count" />
+	</div>
+	<div class="row">
+		<label class="description">Emission Rate:</label>
+		<input type="number" class="textfield tiny" id="emissionrate" min="0" max="99" step="1" placeholder="Rate" title="Emission Rate" />
+	</div>
+	<div class="row">
+		<label class="description">Anchor Part:</label>
+		<select class="modern medium" id="anchorpart" title="Anchor Part">
+			<option value="">None</option>
+		</select>
+	</div>
+	<div class="row">
+		<label class="description">Particles:</label>
+		<div class="list">
+			<div class="particles" id="particlesList"></div>
+			<div class="warning">No particles defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addParticle" title="Add new particle&#10;for this emitter">+</button></div>
+		</div>
+	</div>
+</div>
+</template>
+<template id="fragment_particle">
+<div>
+	<div class="row">
+		<label class="description">Type:</label>
+		<label class="checkblock"></label>
+		<select class="modern medium" id="type" title="Particle type">
+			<option value="ember">Ember</option>
+			<option value="animated">Animated</option>
+		</select>
+	</div>
+	<div class="row hidden" id="animation_row">
+		<label class="description">Animation:</label>
+		<label class="checkblock"></label>
+		<input type="text" class="textfield wide" id="animation" placeholder="Animation" title="Animated particle's&#10;animation file" />
+	</div>
+	<div class="row">
+		<label class="description">Size:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="size_enabled" data-target="size" value="1" />
+			<label class="checkbox" title="Save this parameter" for="size_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="size" min="0.1" max="10.0" step="0.01" placeholder="Size" title="Particle size" />
+	</div>
+	<div class="row">
+		<label class="description">Ang. Velocity:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="angularvelocity_enabled" data-target="angularVelocity" value="1" />
+			<label class="checkbox" title="Save this parameter" for="angularvelocity_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="angularvelocity" step="0.01" placeholder="Vel." title="Angular velocity" />
+	</div>
+	<div class="row">
+		<label class="description">Color:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="color_enabled" data-target="color" value="1" />
+			<label class="checkbox" title="Save this parameter" for="color_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="color1" min="0" max="255" step="1" placeholder="R" title="Color - Red" />
+		<input type="number" class="textfield tiny" id="color2" min="0" max="255" step="1" placeholder="G" title="Color - Green" />
+		<input type="number" class="textfield tiny" id="color3" min="0" max="255" step="1" placeholder="B" title="Color - Blue" />
+		<input type="number" class="textfield tiny" id="color4" min="0" max="255" step="1" placeholder="A" title="Color - Alpha" />
+	</div>
+	<div class="row">
+		<label class="description">Fade:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="fade_enabled" data-target="fade" value="1" />
+			<label class="checkbox" title="Save this parameter" for="fade_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="fade" max="1" min="0" step="0.01" placeholder="Fade" title="Opacity of particle" />
+	</div>
+	<div class="row">
+		<label class="description">Dest. Time:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="destructiontime_enabled" data-target="destructionTime" value="1" />
+			<label class="checkbox" title="Save this parameter" for="destructiontime_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="destructiontime" step="0.1" min="0" placeholder="Dest." title="Destruction time&#10;of particle" />
+	</div>
+	<div class="row">
+		<label class="description">Dest. Action:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="destructionaction_enabled" data-target="destructionAction" value="1" />
+			<label class="checkbox" title="Save this parameter" for="destructionaction_enabled"></label>
+		</label>
+		<input type="text" class="textfield medium" id="destructionaction" placeholder="Dest. Action" title="Destruction action&#10;of particle" />
+	</div>
+	<div class="row">
+		<label class="description">Position:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="position_enabled" data-target="position" value="1" />
+			<label class="checkbox" title="Save this parameter" for="position_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="position1" step="0.01" placeholder="X" title="Position - X" />
+		<input type="number" class="textfield tiny" id="position2" step="0.01" placeholder="Y" title="Position - Y" />
+	</div>
+	<div class="row">
+		<label class="description">Ini. Velocity:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="initialvelocity_enabled" data-target="initialVelocity" value="1" />
+			<label class="checkbox" title="Save this parameter" for="initialvelocity_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="initialvelocity1" step="0.01" placeholder="X" title="Init. Velo. - X" />
+		<input type="number" class="textfield tiny" id="initialvelocity2" step="0.01" placeholder="Y" title="Init. Velo. - Y" />
+	</div>
+	<div class="row">
+		<label class="description">Fin. Velocity:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="finalvelocity_enabled" data-target="finalVelocity" value="1" />
+			<label class="checkbox" title="Save this parameter" for="finalvelocity_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="finalvelocity1" step="0.01" placeholder="X" title="Fin. Velo. - X" />
+		<input type="number" class="textfield tiny" id="finalvelocity2" step="0.01" placeholder="Y" title="Fin. Velo. - Y" />
+	</div>
+	<div class="row">
+		<label class="description">Approach:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="approach_enabled" data-target="approach" value="1" />
+			<label class="checkbox" title="Save this parameter" for="approach_enabled"></label>
+		</label>
+		<input type="number" class="textfield tiny" id="approach1" step="0.01" placeholder="X" title="Approach - X" />
+		<input type="number" class="textfield tiny" id="approach2" step="0.01" placeholder="Y" title="Approach - Y" />
+	</div>
+	<div class="row">
+		<label class="description">Layer:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="layer_enabled" data-target="layer" value="1" />
+			<label class="checkbox" title="Save this parameter" for="layer_enabled"></label>
+		</label>
+		<input type="text" class="textfield medium" id="layer" placeholder="Layer" title="Render layer&#10;of particle" />
+	</div>
+	<div class="row">
+		<label class="description">TTL:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="timetolive_enabled" data-target="timeToLive" value="1" />
+			<label class="checkbox" title="Save this parameter" for="timetolive_enabled"></label>
+		</label>
+		<input type="number" class="textfield medium" id="timetolive" step="0.1" min="0" placeholder="TTL" title="Time to Live&#10;of particle" />
+	</div>
+	<div class="row">
+		<label class="description">Flippable:</label>
+		<label class="checkblock">
+			<input type="checkbox" class="checkbox" id="flippable" value="1" />
+			<label class="checkbox" title="Particle flippable?" for="flippable"></label>
+		</label>
+	</div>
+	<div class="row">
+		<label class="description">Variance:</label>
+		<div class="list">
+			<div class="variances" id="variances"></div>
+			<div class="warning">No variances defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addVariance" title="Add new variance&#10;for this particle">+</button></div>
+		</div>
+	</div>
+</div>
+</template>
 </body>
 </html>

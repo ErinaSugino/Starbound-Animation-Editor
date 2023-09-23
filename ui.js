@@ -101,12 +101,9 @@ class UITab {
 	}
 	removeNavigationLayer(depth = 1) {
 		depth = parseInt(depth) || 1;
-		let cur = this._nests.length - 1;
-		let startIndex = Math.max(cur - depth, 0);
-		if(startIndex == 0) this._nests = [];
-		else this._nests.splice(startIndex);
+		this._nests.splice(depth * -1);
 		
-		let data = (this._nests[Math.max(this._nests.length, 0)] || {}).data || null;
+		let data = (this._nests[Math.max(this._nests.length - 1, 0)] || {}).data || null;
 		this.buildNavbar();
 		this.buildLayeredContent(data);
 	}
@@ -469,11 +466,13 @@ class StatesTab extends UITab {
 	}
 	
 	destroy() {
-		this._content.addEventListener('click', this._boundHandleAction);
-		this._content.addEventListener('dblclick', this._boundHandleDblClick);
-		this._content.addEventListener('change', this._boundHandleChange);
+		this._content.removeEventListener('click', this._boundHandleAction);
+		this._content.removeEventListener('dblclick', this._boundHandleDblClick);
+		this._content.removeEventListener('change', this._boundHandleChange);
 		this._content.innerHTML = '';
 		this._contentList = [];
+		this._animator.removeEventListener('load', this._boundBuildNavbar);
+		this._animator.removeEventListener('load', this._boundBuildLayeredContent);
 		this._animator = null;
 		super.destroy();
 	}
@@ -503,6 +502,7 @@ class StatesTab extends UITab {
 			let action = target.dataset['action'];
 			if(action == "addStateType") this.addStateType();
 			else if(action == "deleteStateType") this.removeStateType(target);
+			else if(action == "editStateType") this.openStateType(target);
 			else if(action == "addState") this.addState(target);
 			else if(action == "deleteState") this.removeState(target);
 			else if(action == "editState") this.openState(target);
@@ -516,7 +516,8 @@ class StatesTab extends UITab {
 		if(target == null) return false;
 		if(!target.classList.contains('editable')) return false;
 		
-		this.renameStateType(target);
+		if(target.parentElement.classList.contains('stateType')) this.renameStateType(target);
+		else if(target.parentElement.classList.contains('state')) this.renameState(target);
 	}
 	handleChange(e) {
 		
@@ -527,7 +528,9 @@ class StatesTab extends UITab {
 		this._contentList = [];
 		
 		if(data == null) this.loadList();
-		else this.loadMenu(data.id, data.refId);
+		else if(data.layer == 1) this.loadStateType(data.id);
+		else if(data.layer == 2) this.loadState(data.id, data.refId);
+		else this.loadList();
 	}
 	loadList() {
 		this._contentElem = document.createElement('div');
@@ -551,24 +554,88 @@ class StatesTab extends UITab {
 		this.content.append(controls);
 		
 		for(let i = 0; i < this._animator._stateTypes.length; i++) {
-			this.doAddStateType(this._animator._stateTypes[i].name, false);
-			
-			for(let j = 0; j < this._animator._stateTypes[i].states.length; j++) {
-				this.doAddState(i, this._animator._stateTypes[i].states[j].name, false);
-			}
+			this.doAddStateType(this._animator._stateTypes[i].name, i);
 		}
 	}
-	loadMenu(id, refId) {
+	loadStateType(id) {
 		this._contentElem = null;
-		this._content.innerHTML = 'Here would be your data';
+		this._content.innerHTML = "";
+		let template = document.getElementById('fragment_stateType').content;
+		let clone = document.importNode(template, true);
+		let stateType = this._animator._stateTypes[id];
+		
+		clone.children[0].dataset['stateTypeId'] = id;
+		
+		this._contentElem = clone.getElementById('states');
+		
+		let select = clone.getElementById('default');
+		for(let i = 0; i < stateType.states.length; i++) {
+			let state = stateType.states[i];
+			let option = document.createElement('option');
+			option.value = state.name;
+			option.innerText = state.name;
+			if(stateType.default == state.name) option.selected = true;
+			select.appendChild(option);
+			
+			if(i > 0) this.doAddState(id, state.name, i);
+		}
+		
+		/* TODO: properties */
+		
+		let selects = clone.children[0].getElementsByTagName('select');
+		for(let i = 0; i < selects.length; i++) {selects[i].addEventListener('change', this.updateSelect.bind(this));}
+		
+		let count = this._contentElem.children.length;
+		this._contentElem.parentElement.previousElementSibling.children[2].innerText = count+" States";
+		
+		this._content.appendChild(clone);
+	}
+	openStateType(elem) {
+		let stateTypeId = parseInt(elem.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state type (with data)
+		let name = this._animator._stateTypes[stateTypeId].name;
+		
+		this.addNavigationLayer("StateType: "+name, {layer: 1, id: stateTypeId});
 	}
 	
+	loadState(id, refId) {
+		this._contentElem = null;
+		this._content.innerHTML = "";
+		let template = document.getElementById('fragment_state').content;
+		let clone = document.importNode(template, true);
+		let stateType = animator._stateTypes[id];
+		let state = stateType.states[refId];
+		
+		clone.children[0].dataset['stateTypeId'] = id;
+		clone.children[0].dataset['stateId'] = refId;
+		
+		clone.getElementById('frames').value = state.frames;
+		clone.getElementById('cycle').value = state.cycle;
+		let select = clone.getElementById('mode');
+		for(let i = 0; i < State.modes().length; i++) {
+			let option = document.createElement('option');
+			option.value = i;
+			option.innerText = State.modes()[i] || "Unknown";
+			if(state.mode == i) option.selected = true;
+			select.appendChild(option);
+		}
+		
+		/* TODO: properties, frame properties */
+		
+		let inputs = clone.children[0].getElementsByTagName('input');
+		for(let i = 0; i < inputs.length; i++) {inputs[i].addEventListener('blur', this.updateInput.bind(this));}
+		let selects = clone.children[0].getElementsByTagName('select');
+		for(let i = 0; i < selects.length; i++) {selects[i].addEventListener('change', this.updateSelect.bind(this));}
+		
+		this._content.appendChild(clone);
+		
+		this.updateMode();
+	}
 	openState(elem) {
 		let stateId = parseInt(elem.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state (with data)
 		let stateTypeId = parseInt(elem.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state -> state list -> cell -> state type (with data)
 		let name = this._animator._stateTypes[stateTypeId].states[stateId].name;
 		
-		this.addNavigationLayer("State: "+name, {id: stateTypeId, refId: stateId});
+		this.addNavigationLayer("State: "+name, {layer: 2, id: stateTypeId, refId: stateId});
 	}
 	
 	addStateType() {
@@ -598,42 +665,43 @@ class StatesTab extends UITab {
 		if(isTaken) ToastModal.open("StateType name taken", true);
 		else this.doAddStateType(name);
 	}
-	doAddStateType(name, apply=true) {
-		let id = this._contentList.length;
+	doAddStateType(name, refId=-1) {
+		if(refId == -1) {this._animator.addStateType(name); refId = this._animator._stateTypes.length - 1;}
+		let stateType = this._animator._stateTypes[refId];
 		
 		let newStateType = document.createElement('div');
 		newStateType.classList.add('stateType');
 		newStateType.dataset['name'] = name;
-		newStateType.dataset['id'] = id;
+		newStateType.dataset['id'] = refId;
 		
 		let cell1 = document.createElement('div');
-		cell1.classList.add('cell', 'indicator');
+		cell1.classList.add('cell', 'editable');
+		cell1.innerText = name;
 		newStateType.append(cell1);
 		
 		let cell2 = document.createElement('div');
-		cell2.classList.add('cell', 'editable');
-		cell2.innerText = name;
+		cell2.classList.add('cell', 'grow', 'right');
+		cell2.innerHTML = "<span>States: "+stateType.states.length+"</span><br><span>Default: "+stateType.default+"</span>";
 		newStateType.append(cell2);
 		
 		let cell3 = document.createElement('div');
-		cell3.classList.add('cell', 'grow', 'right');
-		cell3.innerText = "States: 0";
-		newStateType.append(cell3);
-		
-		let cell4 = document.createElement('div');
-		cell4.classList.add('cell', 'controls', 'hover');
+		cell3.classList.add('cell', 'controls', 'hover');
 		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit State Type";
+		button.dataset['action'] = "editStateType";
+		cell3.append(button);
+		button = document.createElement('button');
 		button.classList.add('modern', 'tiny');
 		button.innerText = '-';
 		button.title = "Remove State Type";
 		button.dataset['action'] = "deleteStateType";
-		cell4.append(button);
-		newStateType.append(cell4);
+		cell3.append(button);
+		newStateType.append(cell3);
 		
 		this._contentElem.append(newStateType);
 		this._contentList.push(name);
-		
-		if(apply) animator.addStateType(name);
 	}
 	
 	renameStateType(elem) {
@@ -649,7 +717,7 @@ class StatesTab extends UITab {
 		let self = this;
 		input.addEventListener('blur', function() {
 			let name = this.value;
-			if(name == orgValue) this.parentElement.innerText = orgValue;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
 			else self.checkRenameStateType(id, name);
 		});
 		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
@@ -666,7 +734,7 @@ class StatesTab extends UITab {
 				let orgName = this._contentElem.children[id].dataset['name'];
 				this._poolsElem.children[id].children[1].innerText = orgName;
 			}
-			ToastModal.open("Pool name taken", true);
+			ToastModal.open("StateType name taken", true);
 		} else this.doRenameStateType(id, name);
 	}
 	doRenameStateType(id, name) {
@@ -686,7 +754,7 @@ class StatesTab extends UITab {
 		
 		Modal.confirm(
 			"Delete State Type",
-			"Are you sure you want to delete the state type \""+name+"\"?\n\n<b>Every state and every part state associated with it will be removed too!</b>",
+			"Are you sure you want to delete the state type \""+name+"\"?<br><br><b>Every state and every part state associated with it will be removed too!</b>",
 			(function() {this.doRemoveStateType(id); return true;}).bind(this),
 			null,
 			"Delete",
@@ -708,7 +776,7 @@ class StatesTab extends UITab {
 	toggleOpen(elem) {
 		let parent = elem.parentElement;
 		let isOpen = parent.classList.contains('open');
-		if(isOpen) parent.children[2].innerText = "States: "+this._animator._stateTypes[parent.dataset['id']].states.length;
+		/*if(isOpen) parent.children[2].innerText = "States: "+this._animator._stateTypes[parent.dataset['id']].states.length;
 		else {
 			let target = parent.children[2];
 			
@@ -773,14 +841,14 @@ class StatesTab extends UITab {
 				
 				list.append(newState);
 			}
-		}
+		}*/
 		
 		parent.classList.toggle('open');
 	}
 	
 	addState(elem) {
-		let id = parseInt(elem.parentElement.parentElement.parentElement.dataset['id']) || 0; // Button -> container -> cell -> state type (with data)
-		let name = elem.parentElement.parentElement.parentElement.dataset['name'];
+		let id = parseInt(elem.parentElement.parentElement.parentElement.parentElement.dataset['stateTypeId']) || 0; // Button -> container -> row -> list -> state type (with data)
+		let name = this._animator._stateTypes[id].name;
 		Modal.confirm(
 			"Add State to Type",
 			"Enter state name to add to the state type \""+name+"\".<br><br><input class='textfield large' type='text' id='stateName' placeholder='State Name' />",
@@ -807,59 +875,116 @@ class StatesTab extends UITab {
 		if(isTaken) ToastModal.open("State name taken", true);
 		else this.doAddState(typeId, value);
 	}
-	doAddState(typeId, value, apply=true) {
-		if(apply) this._animator._stateTypes[typeId].addState(value);
-		let container = this._contentElem.children[typeId];
-		if(!container.classList.contains('open')) container.children[2].innerText = "States: "+this._animator._stateTypes[typeId].states.length;
-		else {
-			let list = container.children[2].children[0];
-			let newState = document.createElement('div');
-			newState.classList.add('state');
-			newState.dataset['id'] = (this._animator._stateTypes[typeId].states.length - 1);
-			
-			let cell1 = document.createElement('div');
-			cell1.classList.add('cell', 'grow');
-			cell1.innerText = value;
-			newState.append(cell1);
-			
-			let cell2 = document.createElement('div');
-			cell2.classList.add('cell');
-			let text = "Frames: "+state.frames+" @ "+state.cycle+"\n";
-			text += state.modeText();
-			if(state.mode == State.TRANSITION) text+= ' -> '+state.transition;
-			cell2.innerText = text;
-			newState.append(cell2);
-			
-			let cell3 = document.createElement('div');
-			cell3.classList.add('cell', 'controls', 'hover');
-			button = document.createElement('button');
-			button.classList.add('modern', 'tiny');
-			button.innerText = '-';
-			button.title = "Remove State\nfrom State Type";
-			button.dataset['action'] = "deleteState";
-			cell3.append(button);
-			button = document.createElement('button');
-			button.classList.add('modern', 'tiny');
-			button.innerText = '✎';
-			button.title = "Edit State";
-			button.dataset['action'] = "editState";
-			cell3.append(button);
-			newState.append(cell3);
-			
-			list.append(newState);
+	doAddState(typeId, value, refId=-1) {
+		if(refId==-1) this._animator._stateTypes[typeId].addState(value);
+		let actRefId = refId==-1?this._animator._stateTypes[typeId].states.length-1:refId;
+		let state = this._animator._stateTypes[typeId].states[actRefId];
+		let newState = document.createElement('div');
+		newState.classList.add('state');
+		newState.dataset['id'] = (actRefId);
+		newState.dataset['name'] = value;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow', 'editable');
+		cell1.innerText = value;
+		newState.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell');
+		let text = "Frames: "+state.frames+" @ "+state.cycle+"\n";
+		text += state.modeText();
+		if(state.mode == State.TRANSITION) text+= ' -> '+state.transition;
+		cell2.innerText = text;
+		newState.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove State\nfrom State Type";
+		button.dataset['action'] = "deleteState";
+		cell3.append(button);
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit State";
+		button.dataset['action'] = "editState";
+		cell3.append(button);
+		newState.append(cell3);
+		
+		this._contentElem.append(newState);
+		let count = this._contentElem.children.length;
+		if(refId==-1) {this.updateDefaultList(typeId); document.getElementById('statecount').innerText = count+" States";}
+	}
+	updateDefaultList(stateTypeId) {
+		let stateType = this._animator._stateTypes[stateTypeId];
+		let select = document.getElementById('default');
+		select.innerHTML = "";
+		for(let i = 0; i < stateType.states.length; i++) {
+			let state = stateType.states[i];
+			let option = document.createElement('option');
+			option.value = state.name;
+			option.innerText = state.name;
+			if(stateType.default == state.name) option.selected = true;
+			select.appendChild(option);
 		}
 	}
 	
+	renameState(elem) {
+		let orgValue = elem.parentElement.dataset['name'];
+		let refId = parseInt(elem.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['stateTypeId'])||0;
+		let id = parseInt(elem.parentElement.dataset['id'])||0;;
+		
+		let input = document.createElement('input');
+		input.type = "text";
+		input.classList.add('textfield', 'large');
+		input.placeholder = "State Name";
+		input.value = orgValue;
+		let self = this;
+		input.addEventListener('blur', function() {
+			let name = this.value;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
+			else self.checkRenameState(id, refId, name);
+		});
+		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
+		elem.replaceChildren(input);
+		input.focus();
+	}
+	checkRenameState(id, refId, name) {
+		let isTaken = false;
+		for(let i = 0; i < this._animator._stateTypes[refId].states.length; i++) {
+			if(this._animator._stateTypes[refId].states[i].name == name) {isTaken = true; break;}
+		}
+		if(isTaken) {
+			if(this._contentElem) {
+				let state = this._contentElem.children[id-1];
+				let orgName = state.dataset['name'];
+				state.children[0].innerText = orgName;
+			}
+			ToastModal.open("State name taken", true);
+		} else this.doRenameState(id, refId, name);
+	}
+	doRenameState(id, refId, name) {
+		if(id < 0 || refId < 0) return;
+		
+		if(this._contentElem) {
+			this._contentElem.children[id-1].children[0].innerText = name;
+			this._contentElem.children[id-1].dataset['name'] = name;
+		}
+		this._animator._stateTypes[refId].states[id].name = name;
+	}
+	
 	removeState(elem) {
-		let index = parseInt(elem.parentElement.parentElement.dataset['id']) ||  0; // Button -> cell -> state (with data)
-		let parent = elem.parentElement.parentElement.parentElement.parentElement.parentElement // Button -> cell -> sound -> sound list -> cell -> pool (with data)
-		let poolIndex = parseInt(parent.dataset['id']) || 0;
-		let name = parent.dataset['name'];
+		let stateTypeId = parseInt(elem.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['stateTypeId']) ||  0; // Button -> cell -> state -> container -> container -> row -> stateType (with data)
+		let stateType = this._animator._stateTypes[stateTypeId];
+		let stateId = parseInt(elem.parentElement.parentElement.dataset['id']) || 1;
+		let name = stateType.states[stateId].name;
 		
 		Modal.confirm(
 			"Delete State from Type",
-			"Are you sure you want to delete state type \""+name+"\" state #"+(index+1)+"?\n\n<b>This will remove every part state data associated with it!</b>",
-			(function() {this.doRemoveState(poolIndex, index); return true;}).bind(this),
+			"Are you sure you want to delete state type \""+stateType.name+"\" state \""+name+"\"?<br><br><b>This will remove every part state data associated with it!</b>",
+			(function() {this.doRemoveState(stateTypeId, stateId); return true;}).bind(this),
 			null,
 			"Delete",
 			"Abort",
@@ -869,19 +994,797 @@ class StatesTab extends UITab {
 	}
 	doRemoveState(typeId, index) {
 		this._animator._stateTypes[typeId].removeState(index);
-		let container = this._contentElem.children[typeId];
-		if(!container.classList.contains('open')) container.children[2].innerText = "States: "+this._animator._stateTypes[typeId].states.length;
-		else {
-			let list = container.children[2].children[0];
-			list.children[index].remove();
+		this._contentElem.children[index-1].remove();
+		
+		for(let i = 0; i < this._contentElem.children.length; i++) {this._contentElem.children[i].dataset['id'] = i+1;}
+		
+		this.updateDefaultList(typeId);
+		
+		let count = this._contentElem.children.length;
+		document.getElementById('statecount').innerText = count+" States";
+	}
+	
+	updateMode() {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		let elem = document.getElementById('mode_content')
+		let selected = parseInt(document.getElementById('mode').value)||0;
+		elem.innerHTML = "";
+		if(selected == State.TRANSITION) {
+			let allStates = [];
+			for(let i = 0; i < stateType.states.length; i++) {
+				if(i != stateId) allStates.push(stateType.states[i].name);
+			}
 			
-			for(let i = 0; i < list.children.length; i++) {list.children[i].dataset['id'] = i;}
+			let label = document.createElement('label');
+			label.classList.add('description');
+			label.innerText = "Transition:";
+			elem.appendChild(label);
+			
+			let select = document.createElement('select');
+			select.classList.add('modern', 'medium');
+			select.id = "transition";
+			select.addEventListener('change', this.updateSelect.bind(this));
+			
+			for(let i in allStates) {
+				let option = document.createElement('option');
+				option.value = allStates[i];
+				option.innerText = allStates[i];
+				if(state.transition == allStates[i]) option.selected = true;
+				select.appendChild(option);
+			}
+			elem.appendChild(select);
+		}
+	}
+	
+	updateInput(e) {
+		let elem = e.target;
+		let id = elem.id;
+		let value = elem.value;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		switch(id) {
+			case 'frames': state.frames = parseInt(value)||1; elem.value = state.frames; break;
+			case 'cycle': state.cycle = parseFloat(value)||1.0; elem.value = state.cycle; break;
+		}
+	}
+	updateSelect(e) {
+		let elem = e.target;
+		let id = elem.id;
+		let value = elem.value;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		switch(id) {
+			case 'transition': state.transition = value; break;
+			case 'mode': state.mode = parseInt(value)||0; elem.value = state.mode; this.updateMode(); break;
+			case 'default': stateType.default = value; break;
 		}
 	}
 }
 
 class ParticlesTab extends UITab {
+	constructor(elem) {
+		super(elem);
+		this._animator = animator;
+		
+		this._boundHandleAction = this.handleAction.bind(this);
+		this._boundHandleInput = this.handleInput.bind(this);
+		this._boundHandleChange = this.handleChange.bind(this);
+		this._boundHandleDblClick = this.handleDblClick.bind(this);
+		this._content.addEventListener('click', this._boundHandleAction);
+		this._content.addEventListener('dblclick', this._boundHandleDblClick);
+		
+		this._boundBuildNavbar = this.buildNavbar.bind(this);
+		this._boundBuildLayeredContent = this.buildLayeredContent.bind(this);
+		
+		if(elem.classList.contains('active')) this.onLoad();
+	}
 	
+	destroy() {
+		this._content.removeEventListener('click', this._boundHandleAction);
+		this._content.removeEventListener('dblclick', this._boundHandleDblClick);
+		this._content.innerHTML = '';
+		this._animator.removeEventListener('load', this._boundBuildNavbar);
+		this._animator.removeEventListener('load', this._boundBuildLayeredContent);
+		this._animator = null;
+		
+		super.destroy();
+	}
+	
+	onLoad() {
+		super.onLoad();
+		this._animator.addEventListener('load', this._boundBuildNavbar);
+		this._animator.addEventListener('load', this._boundBuildLayeredContent);
+		this.buildNavbar();
+		this.buildLayeredContent();
+	}
+	
+	onUnload() {
+		this._content.innerHTML = '';
+		this._nests = [];
+		this._animator.removeEventListener('load', this._boundBuildNavbar);
+		this._animator.removeEventListener('load', this._boundBuildLayeredContent);
+		super.onUnload();
+	}
+	
+	handleAction(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "BUTTON") return false;
+		
+		let action = target.dataset['action'];
+		if(action == "addEmitter") this.addEmitter();
+		else if(action == "editEmitter") this.editEmitter(target);
+		else if(action == "deleteEmitter") this.removeEmitter(target);
+		else if(action == "addParticle") this.addParticle();
+		else if(action == "editParticle") this.editParticle(target);
+		else if(action == "deleteParticle") this.removeParticle(target);
+		else if(action == "addVariance") this.addVariance();
+		else if(action == "deleteVariance") this.removeVariance(target);
+		return true;
+	}
+	
+	handleInput(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "INPUT" || target.type == "checkbox") return false;
+		
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		
+		let id = target.id, value = target.value, checked = target.checked || false;
+		
+		let emitter = this._animator._particleEmitters[eid];
+		
+		if(id == "burstcount") {emitter.burstCount = parseInt(value)||0; return true;}
+		else if(id == "emissionrate") {emitter.emissionRate = parseInt(value)||0; return true;}
+		
+		let particle = emitter.particles[pid];
+		
+		switch(id) {
+			case 'animation': particle.animation = value; break;
+			case 'size': particle.size = value; break;
+			case 'angularvelocity': particle.angularVelocity = value; break;
+			case 'color1': case 'color2': case 'color3': case 'color4':
+				particle.color = [
+					document.getElementById('color1').value,
+					document.getElementById('color2').value,
+					document.getElementById('color3').value,
+					document.getElementById('color4').value
+				];
+				break;
+			case 'fade': particle.fade = value; break;
+			case 'destructiontime': particle.destructionTime = value; break;
+			case 'destructionaction': particle.destructionAction = value; break;
+			case 'position1': case 'position2':
+				particle.position = [
+					document.getElementById('position1').value,
+					document.getElementById('position2').value
+				];
+				break;
+			case 'initialvelocity1': case 'initialvelocity2':
+				particle.initialVelocity = [
+					document.getElementById('initialvelocity1').value,
+					document.getElementById('initialvelocity2').value
+				];
+				break;
+			case 'finalvelocity1': case 'finalvelocity2':
+				particle.finalVelocity = [
+					document.getElementById('finalvelocity1').value,
+					document.getElementById('finalvelocity2').value
+				];
+				break;
+			case 'approach1': case 'approach2':
+				particle.approach = [
+					document.getElementById('approach1').value,
+					document.getElementById('approach2').value
+				];
+				break;
+			case 'layer': particle.layer = value; break;
+			case 'timetolive': particle.timeToLive = value; break;
+			
+			case 'var_size1': particle.setVariance('size', value); break;
+			case 'var_timeToLive1': particle.setVariance('timeToLive', value); break;
+			case 'var_initialVelocity1': case 'var_initialVelocity2':
+				particle.setVariance('initialVelocity', [
+					document.getElementById('var_initialVelocity1').value,
+					document.getElementById('var_initialVelocity2').value
+				]);
+				break;
+		}
+	}
+	
+	handleDblClick(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(!target.classList.contains('editable')) return false;
+		
+		if(target.parentElement.classList.contains('emitter')) this.renameEmitter(target);
+		else if(target.parentElement.classList.contains('particle')) this.renameParticle(target);
+	}
+	
+	handleChange(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "SELECT" && target.id != "flippable") return false;
+		
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		
+		let id = target.id, value = target.value, checked = target.checked || false;
+		switch(id) {
+			case 'anchorpart':
+				this._animator._particleEmitters[eid].anchorPart = value;
+				break;
+			case 'type':
+				this._animator._particleEmitters[eid]._particles[pid].type = value;
+				if(value == "animated") document.getElementById('animation_row').classList.remove('hidden');
+				else document.getElementById('animation_row').classList.add('hidden');
+				break;
+			case 'flippable':
+				this._animator._particleEmitters[eid]._particles[pid].flippable = checked;
+				break;
+		}
+	}
+	
+	buildLayeredContent(data = null) {
+		this._content.innerHTML = '';
+		
+		if(data == null) this.loadMenu();
+		else if(data.layer == 1) this.loadEmitter(data.id);
+		else if(data.layer == 2) this.loadParticle(data.id, data.particleId);
+		else this.loadMenu();
+	}
+	
+	loadMenu() {
+		this._contentElem = document.createElement('div');
+		this._contentElem.classList.add('emitters');
+		this._content.replaceChildren(this._contentElem);
+		
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = 'No particle emitters defined.';
+		this._content.append(warning);
+		
+		let controls = document.createElement('div');
+		controls.classList.add('sticky_controls');
+		let button = document.createElement('button');
+		button.type = 'button';
+		button.classList.add('modern', 'tiny');
+		button.title = "Add new\nparticle emitter";
+		button.innerText = '+';
+		button.dataset['action'] = 'addEmitter';
+		controls.append(button);
+		this.content.append(controls);
+		
+		for(let i = 0; i < this._animator._particleEmitters.length; i++) {
+			this.doAddEmitter(this._animator._particleEmitters[i].name, i);
+		}
+	}
+	loadEmitter(eid) {
+		this._contentElem = null;
+		let template = document.getElementById('fragment_emitter').content;
+		let clone = document.importNode(template, true);
+		let emitter = this._animator._particleEmitters[eid];
+		
+		clone.children[0].dataset['id'] = eid;
+		clone.children[0].dataset['name'] = this._animator._particleEmitters[eid].name;
+		
+		clone.getElementById('burstcount').value = emitter.burstCount;
+		clone.getElementById('emissionrate').value = emitter.emissionRate;
+		
+		let select = clone.getElementById('anchorpart');
+		let parts = [];
+		for(let i = 0; i < this._animator._parts.length; i++) {
+			parts.push(this._animator._parts[i].name);
+		}
+		parts.sort();
+		for(let i = 0; i < parts.length; i++) {
+			let option = document.createElement('option');
+			option.value = parts[i];
+			option.innerText = parts[i];
+			select.append(option);
+		}
+		
+		let inputs = clone.querySelectorAll('input');
+		for(let i = 0; i < inputs.length; i++) {
+			inputs[i].addEventListener('blur', this._boundHandleInput);
+		}
+		let selects = clone.querySelectorAll('select');
+		for(let i = 0; i < selects.length; i++) {
+			selects[i].addEventListener('change', this._boundHandleChange);
+		}
+		
+		this._content.appendChild(clone);
+		this._contentElem = document.getElementById('particlesList');
+		
+		for(let i = 0; i < emitter._particles.length; i++) {
+			let isComplex = emitter._particles[i] instanceof ParticleAnimated;
+			if(isComplex) this.doAddParticle(true, undefined, i);
+			else this.doAddParticle(false, emitter._particles[i].name, i);
+		}
+	}
+	loadParticle(eid, pid) {
+		let template = document.getElementById('fragment_particle').content;
+		let clone = document.importNode(template, true);
+		let particle = this._animator._particleEmitters[eid]._particles[pid];
+		
+		clone.children[0].dataset['id'] = eid;
+		clone.children[0].dataset['pid'] = pid;
+		
+		clone.getElementById('type').value = particle.type;
+		clone.getElementById('type').addEventListener('change', this._boundHandleChange);
+		clone.getElementById('animation').value = particle.animation;
+		if(particle.type == "animated") clone.getElementById('animation_row').classList.remove('hidden');
+		clone.getElementById('size').value = particle.size;
+		clone.getElementById('angularvelocity').value = particle.angularVelocity;
+		let color = particle.color;
+		clone.getElementById('color1').value = color[0];
+		clone.getElementById('color2').value = color[1];
+		clone.getElementById('color3').value = color[2];
+		clone.getElementById('color4').value = color[3];
+		clone.getElementById('fade').value = particle.fade;
+		clone.getElementById('destructiontime').value = particle.destructionTime;
+		clone.getElementById('destructionaction').value = particle.destructionAction;
+		let pos = particle.position;
+		clone.getElementById('position1').value = pos[0];
+		clone.getElementById('position2').value = pos[1];
+		let iVel = particle.initialVelocity;
+		clone.getElementById('initialvelocity1').value = iVel[0];
+		clone.getElementById('initialvelocity2').value = iVel[1];
+		let fVel = particle.finalVelocity;
+		clone.getElementById('finalvelocity1').value = fVel[0];
+		clone.getElementById('finalvelocity2').value = fVel[1];
+		let app = particle.approach;
+		clone.getElementById('approach1').value = app[0];
+		clone.getElementById('approach2').value = app[1];
+		clone.getElementById('layer').value = particle.layer;
+		clone.getElementById('timetolive').value = particle.timeToLive;
+		clone.getElementById('flippable').checked = particle.flippable;
+		clone.getElementById('flippable').addEventListener('change', this._boundHandleChange);
+		
+		let enabled = particle.saveParameters;
+		clone.getElementById('size_enabled').checked = enabled['size'];
+		clone.getElementById('angularvelocity_enabled').checked = enabled['angularVelocity'];
+		clone.getElementById('color_enabled').checked = enabled['color'];
+		clone.getElementById('fade_enabled').checked = enabled['fade'];
+		clone.getElementById('destructiontime_enabled').checked = enabled['destructionTime'];
+		clone.getElementById('destructionaction_enabled').checked = enabled['destructionAction'];
+		clone.getElementById('position_enabled').checked = enabled['position'];
+		clone.getElementById('initialvelocity_enabled').checked = enabled['initialVelocity'];
+		clone.getElementById('finalvelocity_enabled').checked = enabled['finalVelocity'];
+		clone.getElementById('approach_enabled').checked = enabled['approach'];
+		clone.getElementById('layer_enabled').checked = enabled['layer'];
+		clone.getElementById('timetolive_enabled').checked = enabled['timeToLive'];
+		
+		let inputs = clone.querySelectorAll('input');
+		for(let i = 0; i < inputs.length; i++) {
+			inputs[i].addEventListener('blur', this._boundHandleInput);
+		}
+		let selects = clone.querySelectorAll('select, #flippable');
+		for(let i = 0; i < selects.length; i++) {
+			selects[i].addEventListener('change', this._boundHandleChange);
+		}
+		let checks = clone.querySelectorAll('input.checkbox:not(#flippable)');
+		for(let i = 0; i < checks.length; i++) {
+			checks[i].addEventListener('change', this.setEnabled.bind(this));
+		}
+		
+		this._content.appendChild(clone);
+		
+		let variances = particle.variance;
+		let allowed = ParticleAnimated.allowedVariance();
+		for(let i in variances) {
+			let val1 = "", val2 = "";
+			let val = variances[i];
+			if(allowed[i]) {val1 = val[0]; val2 = val[1];}
+			else val1 = val;
+			this.doAddVariance(i, val1, val2);
+		}
+	}
+	
+	setEnabled(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "INPUT" || !target.classList.contains('checkbox')) return false;
+		
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		
+		let id = target.id, checked = target.checked, t = target.dataset['target'];
+		this._animator._particleEmitters[eid]._particles[pid].setSaveParameters(t, checked);
+	}
+	
+	addEmitter() {
+		Modal.confirm(
+			"Add Particle Emitter",
+			"Enter name of the new particle emitter.<br><br><input class='textfield large' type='text' id='emitterName' placeholder='Particle Emitter Name' />",
+			(function() {
+				let name = document.getElementById('emitterName').value;
+				if(name != "") {
+					this.checkAddEmitter(name);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddEmitter(name) {
+		let isTaken = false;
+		for(let i = 0; i < this._animator._particleEmitters.length; i++) {
+			if(this._animator._particleEmitters[i].name == name) {isTaken = true; break;}
+		}
+		
+		if(isTaken) ToastModal.open("Emitter name taken", true);
+		else this.doAddEmitter(name);
+	}
+	doAddEmitter(name, refId=-1) {
+		if(refId==-1) this._animator.addParticleEmitter(name);
+		let actRefId = refId==-1?this._animator._particleEmitters.length-1:refId;
+		let emitter = this._animator._particleEmitters[actRefId];
+		
+		let newEmitter = document.createElement('div');
+		newEmitter.classList.add('emitter');
+		newEmitter.dataset['name'] = name;
+		newEmitter.dataset['id'] = actRefId;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow', 'editable');
+		cell1.innerText = name;
+		newEmitter.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'right');
+		cell2.innerHTML = "<span>Particles: "+emitter.particles.length+"</span>";
+		newEmitter.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit Emitter";
+		button.dataset['action'] = "editEmitter";
+		cell3.append(button);
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Emitter";
+		button.dataset['action'] = "deleteEmitter";
+		cell3.append(button);
+		newEmitter.append(cell3);
+		
+		this._contentElem.append(newEmitter);
+	}
+	
+	renameEmitter(elem) {
+		let orgValue = elem.parentElement.dataset['name'];
+		let id = parseInt(elem.parentElement.dataset['id'])||0;
+		
+		let input = document.createElement('input');
+		input.type = "text";
+		input.classList.add('textfield', 'large');
+		input.placeholder = "Emitter Name";
+		input.value = orgValue;
+		let self = this;
+		input.addEventListener('blur', function() {
+			let name = this.value;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
+			else self.checkRenameEmitter(id, name);
+		});
+		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
+		elem.replaceChildren(input);
+		input.focus();
+	}
+	checkRenameEmitter(id, name) {
+		let isTaken = false;
+		for(let i = 0; i < this._animator._particleEmitters.length; i++) {
+			if(this._animator._particleEmitters[i].name == name) {isTaken = true; break;}
+		}
+		if(isTaken) {
+			let orgName = this._contentElem.children[id].dataset['name'];
+			this._contentElem.children[id].children[0].innerText = orgName;
+			ToastModal.open("Emitter name taken", true);
+		} else this.doRenameEmitter(id, name);
+	}
+	doRenameEmitter(id, name) {
+		if(id < 0) return;
+		
+		this._contentElem.children[id].children[0].innerText = name;
+		this._contentElem.children[id].dataset['name'] = name;
+		this._animator._particleEmitters[id].name = name;
+	}
+	
+	removeEmitter(elem) {
+		let name = elem.parentElement.parentElement.dataset['name']; // Button -> Cell -> Emitter (with data)
+		let id = parseInt(elem.parentElement.parentElement.dataset['id'])||0;
+		
+		Modal.confirm(
+			"Delete Particle Emitter",
+			"Are you sure you want to delete the particle emitter \""+name+"\"?",
+			(function() {this.doRemoveEmitter(id); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveEmitter(id) {
+		this._contentElem.children[id].remove();
+		this._animator.removeParticleEmitter(id);
+		
+		for(let i = 0; i < this._contentElem.children.length; i++) {
+			this._contentElem.children[i].dataset['id'] = i;
+		}
+	}
+	
+	editEmitter(elem) {
+		let eid = parseInt(elem.parentElement.parentElement.dataset['id'])||0;
+		let name = elem.parentElement.parentElement.dataset['name']; // Button -> Cell -> Emitter (with data)
+		
+		this.addNavigationLayer("Emitter: "+name, {layer: 1, id: eid});
+	}
+	
+	addParticle() {
+		Modal.confirm(
+			"Add Particle",
+			"Enter name of the new particle.<br><br>Leave empty to define one inline.<br><br><input class='textfield large' type='text' id='particleName' placeholder='Particle Name' />",
+			(function() {
+				let name = document.getElementById('particleName').value;
+				if(name != "") {
+					this.doAddParticle(false, name);
+					return true;
+				} else {
+					this.doAddParticle(true);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	doAddParticle(isComplex, data, index = -1) {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let emitter = this._animator._particleEmitters[eid];
+		if(index == -1) {emitter.addParticle(isComplex, data); index = emitter._particles.length-1;}
+		let particle = emitter._particles[index];
+		
+		let newParticle = document.createElement('div');
+		newParticle.classList.add('particle');
+		newParticle.dataset['id'] = this._contentElem.children.length;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		if(!isComplex) {
+			cell1.classList.add('editable');
+			cell1.innerText = String(data);
+			newParticle.dataset['name'] = String(data);
+		} else cell1.innerText = 'Custom Particle';
+		newParticle.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow', 'right');
+		if(isComplex) cell2.innerText = particle.type;
+		newParticle.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		if(isComplex) {
+			button.classList.add('modern', 'tiny');
+			button.innerText = '✎';
+			button.title = "Edit Particle";
+			button.dataset['action'] = "editParticle";
+			cell3.append(button);
+			button = document.createElement('button');
+		}
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Particle";
+		button.dataset['action'] = "deleteParticle";
+		cell3.append(button);
+		newParticle.append(cell3);
+		
+		this._contentElem.append(newParticle);
+	}
+	
+	editParticle(elem) {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(elem.parentElement.parentElement.dataset['id']) ||  0; // Button -> cell -> particle (with data)
+		
+		this.addNavigationLayer("Particle #"+(pid+1), {layer: 2, id: eid, particleId: pid});
+	}
+	
+	renameParticle(elem) {
+		let orgValue = elem.parentElement.dataset['name'];
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(elem.parentElement.dataset['id'])||0;
+		
+		let input = document.createElement('input');
+		input.type = "text";
+		input.classList.add('textfield', 'large');
+		input.placeholder = "Particle Name";
+		input.value = orgValue;
+		let self = this;
+		input.addEventListener('blur', function() {
+			let name = this.value;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
+			else self.doRenameParticle(eid, pid, name);
+		});
+		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
+		elem.replaceChildren(input);
+		input.focus();
+	}
+	doRenameParticle(eid, pid, name) {
+		if(eid < 0 || pid < 0) return;
+		
+		this._contentElem.children[pid].children[0].innerText = name;
+		this._animator._particleEmitters[eid]._particles[pid].name = name;
+	}
+	
+	removeParticle(elem) {
+		let index = parseInt(elem.parentElement.parentElement.dataset['id'])||0; // Button -> cell -> particle (with data)
+		
+		Modal.confirm(
+			"Delete Particle",
+			"Are you sure you want to delete particle #"+(index+1)+"?",
+			(function() {this.doRemoveParticle(index); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveParticle(index) {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let emitter = this._animator._particleEmitters[eid];
+		
+		emitter.removeParticle(index);
+		this._contentElem.children[index].remove();
+		
+		for(let i = 0; i < this._contentElem.children.length; i++) {this._contentElem.children[i].dataset['id'] = i;}
+	}
+	
+	addVariance() {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		let particle = this._animator._particleEmitters[eid]._particles[pid];
+		let variances = particle.variance;
+		let allowed = ParticleAnimated.allowedVariance();
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(variances, i) && document.getElementById('var_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Variance",
+			"Select variance to add.<br><br><select class='modern large' id='variance'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('variance').value;
+				if(value != "" && value != null) {
+					this.checkAddVariance(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddVariance(name = null) {
+		if(name == null) return;
+		
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		let particle = this._animator._particleEmitters[eid]._particles[pid];
+		
+		if(!Object.hasOwn(ParticleAnimated.allowedVariance(), name)) {ToastModal.open("Invalid variance", true); return;}
+		
+		if(document.getElementById('var_'+name) != null) ToastModal.open("Variance already set", true);
+		else this.doAddVariance(name);
+	}
+	doAddVariance(name, val1 = "", val2 = "") {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		let particle = this._animator._particleEmitters[eid]._particles[pid];
+		let varTypes = ParticleAnimated.allowedVariance();
+		
+		let newVariance = document.createElement('div');
+		newVariance.classList.add('variance');
+		newVariance.id = "var_"+name;
+		newVariance.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		let input = document.createElement('input');
+		input.classList.add('textfield', 'tiny');
+		input.type = "number";
+		input.step = "0.01";
+		input.placeholder = "Val 1";
+		input.title = name+" - Val 1";
+		input.id = "var_"+name+"1";
+		input.value = val1;
+		input.addEventListener('blur', this._boundHandleInput);
+		cell1.append(input);
+		if(varTypes[name]) {
+			let filler = document.createTextNode("\n");
+			cell1.append(filler);
+			input = document.createElement('input');
+			input.classList.add('textfield', 'tiny');
+			input.type = "number";
+			input.step = "0.01";
+			input.placeholder = "Val 2";
+			input.title = name+" - Val 2";
+			input.id = "var_"+name+"2";
+			input.value = val2;
+			input.addEventListener('blur', this._boundHandleInput);
+			cell1.append(input);
+		}
+		newVariance.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Variance";
+		button.dataset['action'] = "deleteVariance";
+		cell2.append(button);
+		newVariance.append(cell2);
+		
+		document.getElementById('variances').append(newVariance);
+	}
+	
+	removeVariance(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Variance",
+			"Are you sure you want to delete variance "+name+"?",
+			(function() {this.doRemoveVariance(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveVariance(name) {
+		let eid = parseInt(this._content.children[0].dataset['id'])||0;
+		let pid = parseInt(this._content.children[0].dataset['pid'])||0;
+		let particle = this._animator._particleEmitters[eid]._particles[pid];
+		
+		particle.removeVariance(name);
+		
+		document.getElementById('var_'+name).remove();
+	}
 }
 
 class GroupsTab extends UITab {
@@ -1049,7 +1952,7 @@ class GroupsTab extends UITab {
 		let self = this;
 		input.addEventListener('blur', function() {
 			let name = this.value;
-			if(name == orgValue) this.parentElement.innerText = orgValue;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
 			else self.checkRenameGroup(id, name);
 		});
 		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
@@ -1059,7 +1962,7 @@ class GroupsTab extends UITab {
 	checkRenameGroup(id, name) {
 		let isTaken = false;
 		for(let i = 0; i < this._animator._transformationGroups.length; i++) {
-			if(this._animator._sounds[i].name == name) {isTaken = true; break;}
+			if(this._animator._groupsElem[i].name == name) {isTaken = true; break;}
 		}
 		if(isTaken) {
 			let orgName = this._groupsElem.children[id].dataset['name'];
@@ -1256,7 +2159,7 @@ class SoundsTab extends UITab {
 		let self = this;
 		input.addEventListener('blur', function() {
 			let name = this.value;
-			if(name == orgValue) this.parentElement.innerText = orgValue;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
 			else self.checkRenamePool(id, name);
 		});
 		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});

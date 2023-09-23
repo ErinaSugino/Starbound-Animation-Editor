@@ -100,7 +100,7 @@ class Part {
 	get zLevel() {return this._zLevel;}
 	set zLevel(val) {this._zLevel = val == null ? null : (parseInt(val) || 1);}
 	
-	get groups() {return this._groups;}
+	get groups() {return [...this._groups];}
 	addGroup(id) {id = parseInt(id) || 0; this._groups.push(id);}
 	removeGroup(id) {
 		id = parseInt(id) || 0;
@@ -108,13 +108,14 @@ class Part {
 		if(i > -1) this._groups.splice(i, 1);
 	}
 	
-	get partStates() {return this._partStates;}
+	get partStates() {return [...this._partStates];}
 	addPartState(id, data = {}) {id = parseInt(id) || 0; let obj = new PartState(id, data); this._partStates.push(obj); return obj.id;}
 	removePartState(id) {
 		id = parseInt(id) || 0;
-		if(!this._partStates[id]) return;
+		if(!this._partStates[id]) return false;
 		let p = this._partStates.splice(id, 1);
 		try{p[0].destroy();}catch(e){console.warn("Couldn't destroy part state", e);}
+		return true;
 	}
 	
 	output() {
@@ -187,9 +188,15 @@ class PartState {
 	}
 	set reference(val) {this._stateTypeId = parseInt(val) || 0;}
 	
-	get animationStates() {return this._animationStates;}
+	get animationStates() {return [...this._animationStates];}
 	addAnimationState(id, data = {}) {id = parseInt(id) || 0; let obj = new AnimationState(id, data); this._animationStates.push(obj); return obj.id;}
-	removeAnimationState(id) {id = parseInt(id) || 0; if(this._animationStates[id]) this._animationStates.splice(id, 1);}
+	removeAnimationState(id) {
+		id = parseInt(id) || 0;
+		if(!this._animationStates[id]) return false;
+		let x = this._animationStates.splice(id, 1);
+		try{x[0].destroy();}catch(e){console.warn("Could not destroy animation state", e);}
+		return true;
+	}
 	
 	output() {
 		let resObj = {};
@@ -250,7 +257,7 @@ class AnimationState {
 	}
 	set reference(val) {this._stateId = parseInt(val) || 0;}
 	
-	get properties() {return this._properties;}
+	get properties() {return Object.assign({}, this._properties);}
 	getProperty(name) {return this._properties[name];}
 	setProperty(name, val) {
 		name = String(name);
@@ -272,7 +279,7 @@ class AnimationState {
 	}
 	removeProperty(name) {name = String(name); return delete this._properties[name];}
 	
-	get frameProperties() {return this._frameProperties;}
+	get frameProperties() {return Object.assign({}, this._frameProperties);}
 	getFrameProperty(name) {return this._frameProperties[name];}
 	addFrameProperty(name, val) {
 		name = String(name);
@@ -323,7 +330,7 @@ class StateType {
 	#_id = null;
 	
 	// List of allowed custom properties
-	#_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
+	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
 	
 	constructor(name, data = {}) {
 		this.#_id = IDManager.getId(this);
@@ -376,18 +383,28 @@ class StateType {
 	get default() {return this._default;}
 	set default(val) {this._default = val == null ? "none" : String(val);}
 	
-	get states() {return this._states;}
+	get states() {return [...this._states];}
 	addState(name, data = {}) {name = String(name); let obj = new State(name, data); this._states.push(obj); return obj.id;}
-	removeState(id) {id = parseInt(id) || 0; if(this._states[id]) this._states.splice(id, 1);}
+	removeState(id) {
+		id = parseInt(id) || 0;
+		if(!this._states[id]) return false;
+		let removed = this._states.splice(id, 1)[0];
+		if(removed.name == this._default) this._default = "none";
+		for(let i = 0; i < this._states.length; i++) {
+			if(this._states[i]._transition == removed.name) this._states[i]._transition = "none";
+		}
+		try{removed[0].destroy();}catch(e){console.warn("Could not destroy state", e);}
+		return true;
+	}
 	
-	get properties() {return this._properties;}
+	get properties() {return Object.assign({}, this._properties);}
 	getProperty(name) {return this._properties[name];}
 	setProperty(name, val) {
-		let allowed = Object.keys(this.#_allowedProperties);
+		let allowed = Object.keys(StateType.#_allowedProperties);
 		let i = allowed.indexOf(name);
 		if(i < 0) return false;
 		
-		val = this.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
+		val = StateType.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
 		
 		this._properties[name] = val;
 		return true;
@@ -412,13 +429,13 @@ class State {
 	#_id = null;
 	
 	// Available modes for animations and their static IDs
-	#_modes = ["loop", "transition", "end"];
+	static #_modes = ["loop", "transition", "end"];
 	static get LOOP() {return 0;}
 	static get TRANSITION() {return 1;}
 	static get END() {return 2;}
 	
 	// List of allowed custom properties
-	#_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
+	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
 	
 	constructor(name, data = {}) {
 		this.#_id = IDManager.getId(this);
@@ -442,10 +459,10 @@ class State {
 	setup(data = {}) {
 		if(typeof data != 'object' || Array.isArray(data) || Object.keys(data).length <= 0) return;
 		
-		if(data.frames) this._frames = parseInt(data.frames) || 1;
-		if(data.cycle) this._cycle = parseFloat(data.cycle) || 1;
+		if(typeof data.frames != "undefined") this._frames = parseInt(data.frames) || 1;
+		if(typeof data.cycle != "undefined") this._cycle = parseFloat(data.cycle) || 1;
 		if(data.mode) {
-			let i = this.#_modes.indexOf(String(data.mode));
+			let i = State.#_modes.indexOf(String(data.mode));
 			if(i > -1) this._mode = i;
 		}
 		if(data.transition) this._transition = String(data.transition);
@@ -467,7 +484,7 @@ class State {
 	get id() {return this.#_id;}
 	
 	get name() {return this._stateName;}
-	set name(val) {this._stateName = String(name);}
+	set name(val) {this._stateName = String(val);}
 	
 	get frames() {return this._frames;}
 	set frames(val) {this._frames = parseInt(val) || 1;}
@@ -475,36 +492,38 @@ class State {
 	get cycle() {return this._cycle;}
 	set cycle(val) {this._cycle = parseFloat(val) || 1;}
 	
+	static modes() {return State.#_modes;}
 	get mode() {return this._mode;}
-	modeText() {return this.#_modes[this._mode];}
-	set mode(val) {val = parseInt(val) || 0; if(this.#_modes[val]) this._mode = val;}
+	modeText() {return State.#_modes[this._mode];}
+	set mode(val) {val = parseInt(val) || 0; if(State.#_modes[val]) this._mode = val;}
 	
 	get transition() {return this._transition;}
 	set transition(val) {this._transition = String(val);}
 	
-	get properties() {return this._properties;}
+	static allowedProperties() {return State.#_allowedProperties;}
+	get properties() {return Object.assign({}, this._properties);}
 	getProperty(name) {return this._properties[name];}
 	setProperty(name, val) {
-		let allowed = Object.keys(this.#_allowedProperties);
+		let allowed = Object.keys(State.#_allowedProperties);
 		let i = allowed.indexOf(name);
 		if(i < 0) return false;
 		
-		val = this.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
+		val = State.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
 		
 		this._properties[name] = val;
 		return true;
 	}
 	removeProperty(name) {return delete this._properties[name];}
 	
-	get frameProperties() {return this._frameProperties;}
+	get frameProperties() {return Object.assign({}, this._frameProperties);}
 	getFrameProperty(name) {return this._frameProperties[name];}
 	addFrameProperty(name, val) {
-		let allowed = Object.keys(this.#_allowedProperties);
+		let allowed = Object.keys(State.#_allowedProperties);
 		let i = allowed.indexOf(name);
 		if(i < 0) return false;
 		if(this._frameProperties[name] == undefined) this._frameProperties[name] = [];
 		
-		val = this.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
+		val = State.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
 		
 		this._frameProperties[name].push(val);
 		return true;
@@ -522,7 +541,7 @@ class State {
 			frames: this._frames,
 			cycle: this._cycle
 		};
-		resObj.mode = this.#_modes[this._mode];
+		resObj.mode = State.#_modes[this._mode];
 		if(this._mode == State.TRANSITION) resObj.transition = this._transition;
 		if(Object.keys(this._properties).length > 0) resObj.properties = this._properties;
 		if(Object.keys(this._frameProperties).length > 0) resObj.frameProperties = this._frameProperties;
@@ -540,7 +559,6 @@ class Emitter {
 		this.#_id = IDManager.getId(this);
 		
 		this._emitterName = String(name);
-		this._isAnimated = false;
 		this._anchorPart = null;
 		this._burstCount = 0;
 		this._emissionRate = 0;
@@ -563,15 +581,14 @@ class Emitter {
 	setup(data = {}) {
 		if(typeof data != 'object' || Array.isArray(data) || Object.keys(data).length <= 0) return;
 		if(data.anchorPart) this.anchorPart = data.anchorPart;
-		if(data.burstCount) this._burstCount = parseInt(data.burstCount) || 0;
-		if(data.emissionRate) this._emissionRate = parseFloat(data.emissionRate) || 0;
+		if(typeof data.burstCount != "undefined") this._burstCount = parseInt(data.burstCount) || 0;
+		if(typeof data.emissionRate != "undefined") this._emissionRate = parseFloat(data.emissionRate) || 0;
 		if(data.particles && typeof data.particles == "object" && Array.isArray(data.particles)) {
 			for(let i = 0; i < data.particles.length; i++) {
 				let particle = data.particles[i];
 				if(typeof particle != "object" || Array.isArray(particle) || !particle.particle) continue;
 				let pData = particle.particle;
-				if(i == 0 && typeof pData != "string") this._isAnimated = true;
-				this.addParticle(pData);
+				this.addParticle((typeof pData != "string"), pData);
 			}
 		}
 	}
@@ -579,18 +596,7 @@ class Emitter {
 	get id() {return this.#_id;}
 	
 	get name() {return this._emitterName;}
-	set name(val) {this._emitterName = String(name);}
-	
-	get animated() {return this._isAnimated;}
-	set animated(val) {
-		val = Boolean(val);
-		if(val == this._isAnimated) return;
-		for(let i = 0; i < this._particles.length; i++) {
-			try{this._particles[i].destroy();}catch(e){console.warn("Could not destroy emitter particles", e);}
-		}
-		this._particles = [];
-		this._isAnimated = val;
-	}
+	set name(val) {this._emitterName = String(val);}
 	
 	get anchorPart() {return this._anchorPart;}
 	anchorPartName() {
@@ -601,22 +607,23 @@ class Emitter {
 	}
 	set anchorPart(val) {this._anchorPart = val == null ? val : String(val);}
 	
-	get burstcount() {return this._burstCount;}
-	set burstcount(val) {this._burstCount = parseInt(val) || 0;}
+	get burstCount() {return this._burstCount;}
+	set burstCount(val) {this._burstCount = parseInt(val) || 0;}
 	
 	get emissionRate() {return this._emissionRate;}
 	set emissionRate(val) {this._emissionRate = parseFloat(val) || 0;}
 	
-	get particles() {return this._particles;}
-	addParticle(data) {
+	get particles() {return [...this._particles];}
+	addParticle(isComplex, data) {
 		let obj;
-		if(this._isAnimated) obj = new ParticleAnimated(data);
+		if(isComplex) obj = new ParticleAnimated(data);
 		else obj = new Particle(data);
 		this._particles.push(obj);
 		return obj.id;
 	}
 	
 	removeParticle(id) {
+		id = parseInt(id) || 0;
 		if(!this._particles[id]) return false;
 		let x = this._particles.splice(id, 1);
 		try{x[0].destroy();}catch(e){console.warn("Could not destroy emitter particle", e);}
@@ -626,7 +633,8 @@ class Emitter {
 	output() {
 		let resObj = {};
 		if(this._anchorPart != null) resObj.anchorPart = this.anchorPartName();
-		if(this._isAnimated) resObj.emissionRate = this._emissionRate; else resObj.burstCount = this._burstCount;
+		if(this._emissionRate > 0) resObj.emissionRate = this._emissionRate;
+		if(this._burstCount > 0) resObj.burstCount = this._burstCount;
 		resObj.particles = [];
 		for(let i = 0; i < this._particles.length; i++) {resObj.particles.push(this._particles[i].output());}
 		return resObj;
@@ -659,23 +667,34 @@ class Particle {
 }
 
 /**
- * Class representing a complex animated particle
+ * Class representing a complex particle
  */
 class ParticleAnimated {
 	#_id = null;
 	
+	static #_allowedVariance = {initialVelocity: true, timeToLive: false, size: false};
+	
 	constructor(parameters = {}) {
 		this.#_id = IDManager.getId(this);
 		
+		this._type = "ember";
 		this._animation = "";
+		this._size = 1.0;
+		this._angularVelocity = 0;
+		this._color = [0,0,0,0];
+		this._fade = 1.0;
+		this._destructionTime = 0;
+		this._destructionAction = "shrink";
 		this._position = [0,0];
 		this._initialVelocity = [0,0];
 		this._finalVelocity = [0,0];
-		this._destructionTime = 0;
-		this._destructionAction = "shrink";
+		this._approach = [0,0];
 		this._layer = "front";
 		this._timeToLive = 0;
 		this._flippable = false;
+		
+		this._variance = {};
+		this._saveParameters = {size:false,angularVelocity:false,color:false,fade:false,destructionTime:false,destructionAction:false,position:false,initialVelocity:false,finalVelocity:false,approach:false,layer:false,timeToLive:false};
 		
 		this.setup(parameters);
 	}
@@ -688,39 +707,85 @@ class ParticleAnimated {
 	setup(data = {}) {
 		if(typeof data != 'object' || Object.keys(data).length == 0) return;
 		
-		if(data.animation) this._animation = String(data.animation);
+		if(data.type) this._type = String(data.type);
+		if(this._type == "animated" && data.animation) this._animation = String(data.animation);
+		if(typeof data.size != "undefined") {this._size = parseFloat(data.size) || 1.0; this._saveParameters.size = true;}
+		if(typeof data.angularVelocity != "undefined") {this._angularVelocity = parseFloat(data.angularVelocity) || 0; this._saveParameters.angularVelocity = true;}
+		if(data.color && Array.isArray(data.color)) {
+			this._color = [parseInt(data.color[0]) || 0, parseInt(data.color[1]) || 0, parseInt(data.color[2]) || 0, parseInt(data.color[3]) || 0];
+			this._saveParameters.color = true;
+		}
+		if(typeof data.fade != "undefined") {this._fade = parseFloat(data.fade) || 1.0; this._saveParameters.fade = true;}
+		if(data.destructionTime) {this._destructionTime = parseFloat(data.destructionTime) || 0; this._saveParameters.destructionTime = true;}
+		if(data.destructionAction) {this._destructionAction = String(data.destructionAction); this._saveParameters.destructionAction = true;}
 		if(data.position && Array.isArray(data.position)) {
 			this._position = [parseFloat(data.position[0]) || 0, parseFloat(data.position[1]) || 0];
+			this._saveParameters.position = true;
 		}
 		if(data.initialVelocity && Array.isArray(data.initialVelocity)) {
 			this._initialVelocity = [parseFloat(data.initialVelocity[0]) || 0, parseFloat(data.initialVelocity[1]) || 0];
+			this._saveParameters.initialVelocity = true;
 		}
 		if(data.finalVelocity && Array.isArray(data.finalVelocity)) {
 			this._finalVelocity = [parseFloat(data.finalVelocity[0]) || 0, parseFloat(data.finalVelocity[1]) || 0];
+			this._saveParameters.finalVelocity = true;
 		}
-		if(data.destructionTime) this._destructionTime = parseFloat(data.destructionTime) || 0;
-		if(data.destructionAction) this._destructionAction = String(data.destructionAction);
-		if(data.layer) this._layer = String(data.layer);
-		if(data.timeToLive) this._timeToLive = parseFloat(data.timeToLive) || 0;
+		if(data.approach && Array.isArray(data.approach)) {
+			this._approach = [parseFloat(data.approach[0]) || 0, parseFloat(data.approach[1]) || 0];
+			this._saveParameters.approach = true;
+		}
+		if(data.layer) {this._layer = String(data.layer); this._saveParameters.layer = true;}
+		if(typeof data.timeToLive != "undefined") {this._timeToLive = parseFloat(data.timeToLive) || 0; this._saveParameters.timeToLive = true;}
 		if(data.flippable) this._flippable = true;
+		
+		if(data.variance && typeof data.variance == "object" && !Array.isArray(data.variance)) {
+			for(let i in data.variance) {
+				if(Object.hasOwn(ParticleAnimated.#_allowedVariance, i)) {
+					let val = data.variance[i];
+					if(ParticleAnimated.#_allowedVariance[i] && Array.isArray(val)) this._variance[i] = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];
+					else this._variance[i] = parseFloat(val) || 0;
+				}
+			}
+		}
 	}
 	
 	get id() {return this.#_id;}
 	
-	get position() {return this._position;}
-	set position(val) {if(Array.isArray(val)) this._position = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	get type() {return this._type;}
+	set type(val) {this._type = String(val); if(this._type != "animated") this._animation = "";}
 	
-	get initialVelocity() {return this._initialVelocity;}
-	set initialVelocity(val) {if(Array.isArray(val)) this._initialVelocity = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	get animation() {return this._animation;}
+	set animation(val) {if(this._type == "animated") this._animation = String(val);}
 	
-	get finalVelocity() {return this._finalVelocity;}
-	set finalVelocity(val) {if(Array.isArray(val)) this._finalVelocity = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	get size() {return this._size;}
+	set size(val) {this._size = parseFloat(val) || 1.0;}
+	
+	get angularVelocity() {return this._angularVelocity;}
+	set angularVelocity(val) {this._angularVelocity = parseFloat(val) || 0;}
+	
+	get color() {return [...this._color];}
+	set color(val) {if(Array.isArray(val)) this._color = [parseInt(val[0]) || 0, parseInt(val[1]) || 0, parseInt(val[2]) || 0, parseInt(val[3]) || 0];}
+	
+	get fade() {return this._fade;}
+	set fade(val) {this._fade = Math.min(1, Math.max(0, parseFloat(val) || 0));}
 	
 	get destructionTime() {return this._destructionTime;}
 	set destructionTime(val) {this._destructionTime = parseFloat(val) || 0;}
 	
 	get destructionAction() {return this._destructionAction;}
 	set destructionAction(val) {this._destructionAction = String(val);}
+	
+	get position() {return [...this._position];}
+	set position(val) {if(Array.isArray(val)) this._position = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	
+	get initialVelocity() {return [...this._initialVelocity];}
+	set initialVelocity(val) {if(Array.isArray(val)) this._initialVelocity = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	
+	get finalVelocity() {return [...this._finalVelocity];}
+	set finalVelocity(val) {if(Array.isArray(val)) this._finalVelocity = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
+	
+	get approach() {return [...this._approach];}
+	set approach(val) {if(Array.isArray(val)) this._approach = [parseFloat(val[0]) || 0, parseFloat(val[1]) || 0];}
 	
 	get layer() {return this._layer;}
 	set layer(val) {this._layer = String(val);}
@@ -731,21 +796,53 @@ class ParticleAnimated {
 	get flippable() {return this._flippable;}
 	set flippable(val) {this._flippable = Boolean(val);}
 	
+	static allowedVariance() {return Object.assign({}, ParticleAnimated.#_allowedVariance);}
+	get variance() {return Object.assign({}, this._variance);}
+	setVariance(name, val) {
+		let allowed = Object.keys(ParticleAnimated.#_allowedVariance);
+		let i = allowed.indexOf(name);
+		if(i < 0) return false;
+		
+		let isRange = ParticleAnimated.#_allowedVariance[allowed[i]];
+		if(isRange) {
+			if(!Array.isArray(val)) return false;
+			val = [parseFloat(val[0])||0, parseFloat(val[1])||0];
+		} else val = parseFloat(val) || (name == "size" ? 1 : 0);
+		
+		this._variance[name] = val;
+		return true;
+	}
+	removeVariance(name) {return delete this._variance[name];}
+	
+	get saveParameters() {return Object.assign({}, this._saveParameters);}
+	setSaveParameters(id, val) {
+		if(!Object.hasOwn(this._saveParameters, id)) return;
+		this._saveParameters[id] = !!val;
+	}
+	
 	output() {
-		return {
-			particle: {
-				type: "animated",
-				animation: this._animation,
-				position: this._position,
-				initialVelocity: this._initialVelocity,
-				finalVelocity: this._finalVelocity,
-				destructionTime: this._destructionTime,
-				destructionAction: this._destructionAction,
-				layer: this._layer,
-				timeToLive: this._timeToLive,
-				flippable: this._flippable
-			}
+		let particle = {
+			type: this._type,
 		};
+		
+		if(this._type == "animated") particle.animation = this._animation;
+		if(this._saveParameters.size) particle.size = this._size;
+		if(this._saveParameters.angularVelocity) particle.angularVelocity = this._angularVelocity;
+		if(this._saveParameters.color) particle.color = this._color;
+		if(this._saveParameters.fade) particle.fade = this._fade;
+		if(this._saveParameters.destructionTime) particle.destructionTime = this._destructionTime;
+		if(this._saveParameters.destructionAction) particle.destructionAction = this._destructionAction;
+		if(this._saveParameters.position) particle.position = this._position;
+		if(this._saveParameters.initialVelocity) particle.initialVelocity = this._initialVelocity;
+		if(this._saveParameters.finalVelocity) particle.finalVelocity = this._finalVelocity;
+		if(this._saveParameters.approach) particle.approach = this._approach;
+		if(this._saveParameters.layer) particle.layer = this._layer;
+		if(this._saveParameters.timeToLive) particle.timeToLive = this._timeToLive;
+		if(this._flippable) particle.flippable = true;
+		
+		if(Object.keys(this._variance).length > 0) particle.variance = this._variance;
+		
+		return {particle: particle};
 	}
 }
 
@@ -774,7 +871,7 @@ class Group {
 	get name() {return this._groupName;}
 	set name(val) {this._groupName = String(val);}
 	
-	getParameter(param) {return this._parameters[param];}
+	getParameter(param) {return Object.assign({}, this._parameters[param]);}
 	setParameter(param, val) {
 		if(param == "interpolated") val = Boolean(val);
 		this._parameters[param] = val;
@@ -808,14 +905,14 @@ class SoundPool {
 	get name() {return this._poolName;}
 	set name(val) {this._poolName = String(val);}
 	
-	get list() {return this._list;}
+	get list() {return [...this._list];}
 	add(val) {
 		this._list.push(String(val));
 		return this._list.length-1;
 	}
 	remove(id) {
-		id = parseInt(id);
-		if(id <= 0 || id >= this._list.length) return false;
+		id = parseInt(id) || 0;
+		if(!this._list[id]) return false;
 		this._list.splice(id, 1);
 		return true;
 	}

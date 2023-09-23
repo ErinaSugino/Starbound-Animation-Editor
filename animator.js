@@ -344,10 +344,10 @@ class Animator {
 			let targets = [];
 			let j;
 			for(j = 0; j < partStates.length; j++) {
-				if(partStates[j].reference == tid) target.unshift(j); // Sort decending
+				if(partStates[j].reference == tid) targets.unshift(j); // Sort decending
 			}
 			for(j = 0; j < targets.length; j++) {
-				partStates[i].removePartState(targets[j]); // Remove last first to keep indexes accurate
+				this._parts[i].removePartState(targets[j]); // Remove last first to keep indexes accurate
 			}
 		}
 		
