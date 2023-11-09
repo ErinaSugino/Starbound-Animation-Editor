@@ -283,7 +283,7 @@ span.json_key {color: var(--json_key_color);}
 span.json_number {color: var(--json_number_color)}
 span.json_expression {color: var(--json_expression_color)}
 
-div.tags:not(:empty)+div.warning,div.sounds:not(:empty)+div.warning,div.groups:not(:empty)+div.warning,div.states:not(:empty)+div.warning,div.emitters:not(:empty)+div.warning,div.particles:not(:empty)+div.warning,div.variances:not(:empty)+div.warning{display: none;}
+div.tags:not(:empty)+div.warning,div.sounds:not(:empty)+div.warning,div.groups:not(:empty)+div.warning,div.states:not(:empty)+div.warning,div.emitters:not(:empty)+div.warning,div.particles:not(:empty)+div.warning,div.variances:not(:empty)+div.warning,div.properties:not(:empty)+div.warning,div.frameProperties:not(:empty)+div.warning,div.frameProperties .list>div:not(:empty)+div.warning{display: none;}
 div.warning {text-align: center; font-weight: bold;}
 
 div.back_button {cursor: pointer; display: inline-block; width: 30px; height: 30px; line-height: 28px; text-align: center; box-sizing: border-box; border: 1px solid lightgrey; border-radius: 5px; margin-right: 15px; user-select: none; transition: background-color 0.3s ease;}
@@ -348,14 +348,21 @@ div.particle > .cell:nth-of-type(2) {padding-right: 10px;}
 div.particle > .cell:nth-of-type(3) > button {vertical-align: middle;}
 div.particle > .cell:nth-of-type(3) > button:nth-of-type(n+2) {margin-left: 5px;}
 
-div.variance {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 23px;}
-div.variance:nth-of-type(n+2) {margin-top: 5px;}
-div.variance > .cell:nth-of-type(1) {padding-right: 10px;}
-div.variance > .cell:nth-of-type(2) {padding-right: 0px;}
+div.variance, div.property, div.frameProperty {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 23px;}
+div.variance:nth-of-type(n+2), div.property:nth-of-type(n+2), div.frameProperty:nth-of-type(n+2) {margin-top: 5px;}
+div.variance > .cell:nth-of-type(1), div.property > .cell:nth-of-type(1), div.frameProperty > .cell:nth-of-type(1) {padding-right: 10px;}
+div.variance > .cell:nth-of-type(2), div.property > .cell:nth-of-type(2) {padding-right: 0px;}
+div.frameProperty > .cell:nth-of-type(3) {padding-right: 0px;}
+div.frameProperty > .cell:nth-of-type(2) > div.list > div > div {display: flex; flex-direction: row; box-sizing: border-box; width: 100%; padding-left: 23px;}
+div.frameProperty > .cell:nth-of-type(2) > div.list > div > div > .cell:nth-of-type(1) {padding-right: 10px;}
+div.frameProperty > .cell:nth-of-type(2) > div.list > div > div > .cell:nth-of-type(2) {padding-right: 0px;}
+
+div.frameProperties:nth-of-type(n+2) {border-top: 1px solid grey;}
 
 div.row:nth-of-type(n+2) {margin-top: 5px;}
 div.row:empty, div.row.hidden {display: none;}
 label.description {display: inline-block; width: 150px; margin-right: 15px; font-weight: bold;}
+div.property label.description, div.frameProperty label.description {width: 300px;}
 
 div.indicator {height: 30px; width: 30px; margin-right: 5px; position: relative; display: inline-block;}
 div.indicator:after {content: ">"; position: absolute; top: 0px; left: 0px; bottom: 0px; right: 0px; font-size: 24px; font-weight: bold; text-align: center; line-height: 28px; cursor: pointer;}
@@ -411,6 +418,7 @@ div.non_sticky_controls {text-align: right; padding: 5px 10px; margin-top: 10px;
 	line-height: 50px;
 	letter-spacing: 4px;
 	text-align: center;
+	white-space: nowrap;
 }
 .modal.red > .modal_title {background-color: var(--modal_title_alt_color);}
 .modal_content {

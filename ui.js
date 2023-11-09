@@ -77,6 +77,7 @@ class UITab {
 		
 		this._boundHandleNavigation = this.handleNavigation.bind(this);
 		this._navbar.addEventListener('click', this._boundHandleNavigation);
+		this._boundResetNavigationLayers = this.resetNavigationLayers.bind(this);
 	}
 	
 	destroy() {
@@ -107,6 +108,9 @@ class UITab {
 		this.buildNavbar();
 		this.buildLayeredContent(data);
 	}
+	resetNavigationLayers() {
+		this._nests = [];
+	}
 	
 	buildNavbar() {
 		let highest = this._nests.length - 1;
@@ -120,7 +124,7 @@ class UITab {
 		let navelem = document.createElement('div');
 		navelem.classList.add('nav_element');
 		navelem.append("Overview");
-		navelem.dataset['depth'] = highest;
+		navelem.dataset['depth'] = highest + 1;
 		this._navbar.append(navelem);
 		
 		for(let i = 0; i < this._nests.length; i++) {
@@ -153,8 +157,8 @@ class UITab {
 	
 	buildLayeredContent(data) {return;}
 	
-	onLoad() {if(this._active) return; this._tab.classList.add('active'); this._active = true;}
-	onUnload() {if(!this._active) return; this._tab.classList.remove('active'); this._active = false;}
+	onLoad() {if(this._active) return; this._tab.classList.add('active'); this._active = true; animator.addEventListener('load', this._boundResetNavigationLayers);}
+	onUnload() {if(!this._active) return; this._tab.classList.remove('active'); this._active = false; animator.removeEventListener('load', this._boundResetNavigationLayers);}
 }
 
 class PreviewTab extends UITab {
@@ -500,13 +504,20 @@ class StatesTab extends UITab {
 		
 		if(target.tagName == "BUTTON") {
 			let action = target.dataset['action'];
-			if(action == "addStateType") this.addStateType();
+			if(action == "addStateType") this.addStateType(target);
 			else if(action == "deleteStateType") this.removeStateType(target);
 			else if(action == "editStateType") this.openStateType(target);
 			else if(action == "addState") this.addState(target);
 			else if(action == "deleteState") this.removeState(target);
 			else if(action == "editState") this.openState(target);
-			return true;
+			else if(action == "addPropertyType") this.addPropertyType(target);
+			else if(action == "addPropertyState") this.addPropertyState(target);
+			else if(action == "deletePropertyType") this.removePropertyType(target);
+			else if(action == "deletePropertyState") this.removePropertyState(target);
+			else if(action == "addFrameProperty") this.addFrameProperty(target);
+			else if(action == "deleteFrameProperty") this.removeFrameProperty(target);
+			else if(action == "addFramePropertyValue") this.addFramePropertyValue(target);
+			else if(action == "deleteFramePropertyValue") this.removeFramePropertyValue(target);
 		} else if(target.classList.contains('indicator')) this.toggleOpen(target);
 		
 		return true;
@@ -580,8 +591,6 @@ class StatesTab extends UITab {
 			if(i > 0) this.doAddState(id, state.name, i);
 		}
 		
-		/* TODO: properties */
-		
 		let selects = clone.children[0].getElementsByTagName('select');
 		for(let i = 0; i < selects.length; i++) {selects[i].addEventListener('change', this.updateSelect.bind(this));}
 		
@@ -589,6 +598,10 @@ class StatesTab extends UITab {
 		this._contentElem.parentElement.previousElementSibling.children[2].innerText = count+" States";
 		
 		this._content.appendChild(clone);
+		
+		for(let i in stateType.properties) {
+			this.doAddPropertyType(i, stateType.properties[i]);
+		}
 	}
 	openStateType(elem) {
 		let stateTypeId = parseInt(elem.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state type (with data)
@@ -619,8 +632,6 @@ class StatesTab extends UITab {
 			select.appendChild(option);
 		}
 		
-		/* TODO: properties, frame properties */
-		
 		let inputs = clone.children[0].getElementsByTagName('input');
 		for(let i = 0; i < inputs.length; i++) {inputs[i].addEventListener('blur', this.updateInput.bind(this));}
 		let selects = clone.children[0].getElementsByTagName('select');
@@ -628,11 +639,18 @@ class StatesTab extends UITab {
 		
 		this._content.appendChild(clone);
 		
+		for(let i in state.properties) {
+			this.doAddPropertyState(i, state.properties[i]);
+		}
+		for(let i in state.frameProperties) {
+			this.doAddFrameProperty(i, state.frameProperties[i]);
+		}
+		
 		this.updateMode();
 	}
 	openState(elem) {
 		let stateId = parseInt(elem.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state (with data)
-		let stateTypeId = parseInt(elem.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> state -> state list -> cell -> state type (with data)
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId']) || 0; // Button -> cell -> state -> state list -> cell -> state type (with data)
 		let name = this._animator._stateTypes[stateTypeId].states[stateId].name;
 		
 		this.addNavigationLayer("State: "+name, {layer: 2, id: stateTypeId, refId: stateId});
@@ -681,7 +699,7 @@ class StatesTab extends UITab {
 		
 		let cell2 = document.createElement('div');
 		cell2.classList.add('cell', 'grow', 'right');
-		cell2.innerHTML = "<span>States: "+stateType.states.length+"</span><br><span>Default: "+stateType.default+"</span>";
+		cell2.innerHTML = "<span>States: "+(stateType.states.length-1)+"</span><br><span>Default: "+stateType.default+"</span>";
 		newStateType.append(cell2);
 		
 		let cell3 = document.createElement('div');
@@ -776,72 +794,6 @@ class StatesTab extends UITab {
 	toggleOpen(elem) {
 		let parent = elem.parentElement;
 		let isOpen = parent.classList.contains('open');
-		/*if(isOpen) parent.children[2].innerText = "States: "+this._animator._stateTypes[parent.dataset['id']].states.length;
-		else {
-			let target = parent.children[2];
-			
-			let newElem = document.createElement('div');
-			newElem.classList.add('sounds');
-			target.replaceChildren(newElem);
-			let list = newElem;
-			
-			newElem = document.createElement('div');
-			newElem.classList.add('warning');
-			newElem.append("No states in this pool.");
-			target.append(newElem);
-			
-			newElem = document.createElement('div');
-			newElem.classList.add('non_sticky_controls');
-			let button = document.createElement('button');
-			button.classList.add('modern', 'tiny');
-			button.dataset['action'] = "addState";
-			button.type = "button";
-			button.title = "Add new sound\nto this pool";
-			button.innerText = '+';
-			newElem.append(button);
-			target.append(newElem);
-			
-			let id = parseInt(parent.dataset['id']) || 0;
-			
-			for(let i = 0; i < this._animator._stateTypes[id].states.length; i++) {
-				let state = this._animator._stateTypes[id].states[i];
-				
-				let newState = document.createElement('div');
-				newState.classList.add('state');
-				newState.dataset['id'] = i;
-				
-				let cell1 = document.createElement('div');
-				cell1.classList.add('cell', 'grow');
-				cell1.innerText = state.name;
-				newState.append(cell1);
-				
-				let cell2 = document.createElement('div');
-				cell2.classList.add('cell');
-				let text = "Frames: "+state.frames+" @ "+state.cycle+"\n";
-				text += state.modeText();
-				if(state.mode == State.TRANSITION) text+= ' -> '+state.transition;
-				cell2.innerText = text;
-				newState.append(cell2);
-				
-				let cell3 = document.createElement('div');
-				cell3.classList.add('cell', 'controls', 'hover');
-				button = document.createElement('button');
-				button.classList.add('modern', 'tiny');
-				button.innerText = '-';
-				button.title = "Remove State\nfrom State Type";
-				button.dataset['action'] = "deleteState";
-				cell3.append(button);
-				button = document.createElement('button');
-				button.classList.add('modern', 'tiny');
-				button.innerText = '✎';
-				button.title = 'Edit State';
-				button.dataset['action'] = "editState";
-				cell3.append(button);
-				newState.append(cell3);
-				
-				list.append(newState);
-			}
-		}*/
 		
 		parent.classList.toggle('open');
 	}
@@ -1002,6 +954,475 @@ class StatesTab extends UITab {
 		
 		let count = this._contentElem.children.length;
 		document.getElementById('statecount').innerText = count+" States";
+	}
+	
+	addPropertyType() {
+		let id = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateType = this._animator._stateTypes[id];
+		let properties = stateType.properties;
+		let allowed = StateType.allowedProperties();
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(properties, i) && document.getElementById('prop_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Property",
+			"Select property to add.<br><br><select class='modern large' id='propertyList'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('propertyList').value;
+				if(value != "" && value != null) {
+					this.checkAddPropertyType(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddPropertyType(name = null) {
+		if(name == null) return;
+		
+		let id = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateType = this._animator._stateTypes[id];
+		
+		if(!Object.hasOwn(StateType.allowedProperties(), name)) {ToastModal.open("Invalid property", true); return;}
+		
+		if(document.getElementById('prop_'+name) != null) ToastModal.open("Property already set", true);
+		else this.doAddPropertyType(name);
+	}
+	doAddPropertyType(name, val = null) {
+		let id = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateType = this._animator._stateTypes[id];
+		let varTypes = StateType.allowedProperties();
+		let isNumber = !!varTypes[name];
+		
+		let newProperty = document.createElement('div');
+		newProperty.classList.add('property');
+		newProperty.id = "prop_"+name;
+		newProperty.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		let input = document.createElement('input');
+		input.classList.add('textfield');
+		if(isNumber) {
+			input.type = "number";
+			input.step = "0.01";
+			input.min = "0";
+			input.value = val || 0;
+		} else {
+			input.type = "text";
+			input.value = val || "";
+		}
+		input.placeholder = "Value";
+		input.title = name+" - Value";
+		input.id = "prop_"+name+"_val";
+		input.addEventListener('blur', this.handleTypeProperty.bind(this));
+		cell1.append(input);
+		newProperty.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Property";
+		button.dataset['action'] = "deletePropertyType";
+		cell2.append(button);
+		newProperty.append(cell2);
+		
+		document.getElementById('properties').append(newProperty);
+	}
+	
+	removePropertyType(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Property",
+			"Are you sure you want to delete property "+name+"?",
+			(function() {this.doRemovePropertyType(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemovePropertyType(name) {
+		let id = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateType = this._animator._stateTypes[id];
+		
+		stateType.removeProperty(name);
+		
+		document.getElementById('prop_'+name).remove();
+	}
+	handleTypeProperty(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "INPUT") return false;
+		
+		let sid = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateType = animator._stateTypes[sid];
+		
+		let id = target.id, value = target.value;
+		id = id.replace(/prop_(.+?)_val/, "$1");
+		
+		stateType.setProperty(id, value);
+	}
+	addPropertyState() {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		let properties = state.properties;
+		let allowed = State.allowedProperties();
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(properties, i) && document.getElementById('prop_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Property",
+			"Select property to add.<br><br><select class='modern large' id='propertyList'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('propertyList').value;
+				if(value != "" && value != null) {
+					this.checkAddPropertyState(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddPropertyState(name = null) {
+		if(name == null) return;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		if(!Object.hasOwn(State.allowedProperties(), name)) {ToastModal.open("Invalid property", true); return;}
+		
+		if(document.getElementById('prop_'+name) != null) ToastModal.open("Property already set", true);
+		else this.doAddPropertyState(name);
+	}
+	doAddPropertyState(name, val = null) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		let varTypes = State.allowedProperties();
+		let isNumber = !!varTypes[name];
+		
+		let newProperty = document.createElement('div');
+		newProperty.classList.add('property');
+		newProperty.id = "prop_"+name;
+		newProperty.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		let input = document.createElement('input');
+		input.classList.add('textfield');
+		if(isNumber) {
+			input.type = "number";
+			input.step = "0.01";
+			input.min = "0";
+			input.value = val || 0;
+		} else {
+			input.type = "text";
+			input.value = val || "";
+		}
+		input.placeholder = "Value";
+		input.title = name+" - Value";
+		input.id = "prop_"+name+"_val";
+		input.addEventListener('blur', this.handleStateProperty.bind(this));
+		cell1.append(input);
+		newProperty.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Property";
+		button.dataset['action'] = "deletePropertyType";
+		cell2.append(button);
+		newProperty.append(cell2);
+		
+		document.getElementById('properties').append(newProperty);
+	}
+	
+	removePropertyState(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Property",
+			"Are you sure you want to delete property "+name+"?",
+			(function() {this.doRemovePropertyState(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemovePropertyState(name) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		state.removeProperty(name);
+		
+		document.getElementById('prop_'+name).remove();
+	}
+	handleStateProperty(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "INPUT") return false;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		let id = target.id, value = target.value;
+		id = id.replace(/prop_(.+?)_val/, "$1");
+		
+		state.setProperty(id, value);
+	}
+	addFrameProperty() {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		let properties = state.frameProperties;
+		let allowed = State.allowedFrameProperties();
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(properties, i) && document.getElementById('fprop_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Frame Property",
+			"Select frame property to add.<br><br><select class='modern large' id='fpropertyList'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('fpropertyList').value;
+				if(value != "" && value != null) {
+					this.checkAddFrameProperty(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddFrameProperty(name = null) {
+		if(name == null) return;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		if(!Object.hasOwn(State.allowedFrameProperties(), name)) {ToastModal.open("Invalid<br>frame property", true); return;}
+		
+		if(document.getElementById('prop_'+name) != null) ToastModal.open("Frame Property<br>already set", true);
+		else this.doAddFrameProperty(name);
+	}
+	doAddFrameProperty(name, values = []) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		let varTypes = State.allowedProperties();
+		let isNumber = !!varTypes[name];
+		
+		let newFrameProperty = document.createElement('div');
+		newFrameProperty.classList.add('frameProperty');
+		newFrameProperty.id = "fprop_"+name;
+		newFrameProperty.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		newFrameProperty.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow');
+		let list = document.createElement('div');
+		list.classList.add('list');
+		let container = document.createElement('div');
+		list.append(container);
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = "No values defined.";
+		list.append(warning);
+		let controls = document.createElement('div');
+		controls.classList.add('non_sticky_controls');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.dataset['action'] = "addFramePropertyValue";
+		button.title = "Add new value\nfor this frame property";
+		button.innerText = "+";
+		controls.append(button);
+		list.append(controls);
+		cell2.append(list);
+		newFrameProperty.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Frame Property";
+		button.dataset['action'] = "deleteFrameProperty";
+		cell3.append(button);
+		newFrameProperty.append(cell3);
+		
+		document.getElementById('frameProperties').append(newFrameProperty);
+		
+		for(let i = 0; i < values.length; i++) {
+			this.doAddFramePropertyValue(name, values[i], false);
+		}
+	}
+	
+	removeFrameProperty(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Frame Property",
+			"Are you sure you want to delete frame property "+name+"?",
+			(function() {this.doRemovePropertyState(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveFrameProperty(name) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		state.deleteFrameProperty(name);
+		
+		document.getElementById('fprop_'+name).remove();
+	}
+	addFramePropertyValue(elem) {
+		let name = elem.parentElement.parentElement.parentElement.parentElement.dataset['param']; //Button -> controls -> list -> cell -> frameProperty (with data)
+		let isNumber = !!(State.allowedFrameProperties()[name] || false);
+		let input = isNumber ? "<input id='frameValue' type='number' class='textfield' min='0', step='0.01' title='Value' placeholder='Value' value='1' />" : "<input id='frameValue' type='text' class='textfield' title='Value' placeholder='Value' />";
+		
+		Modal.confirm(
+			"Add Frame Property Value",
+			"Enter value to add to frame property "+name+".<br><br>"+input,
+			(function() {
+				let value = document.getElementById('frameValue').value;
+				if(value != "" && value != null) {
+					this.doAddFramePropertyValue(name, value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"medium",
+			false
+		);
+	}
+	doAddFramePropertyValue(name, value, apply=true) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		if(apply) state.addFrameProperty(name, value);
+		
+		let container = document.getElementById('fprop_'+name).children[1].children[0].children[0];
+		if(container == null) return false;
+		let num = container.children.length;
+		
+		let newValue = document.createElement('div');
+		newValue.dataset['number'] = num;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = value;
+		cell1.append(label);
+		newValue.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Frame Property Value";
+		button.dataset['action'] = "deleteFramePropertyValue";
+		cell2.append(button);
+		newValue.append(cell2);
+		
+		container.append(newValue);
+	}
+	removeFramePropertyValue(elem) {
+		let name = elem.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['param']; //Button -> cell -> value -> container -> list -> cell -> frameProperty (with data)
+		let num = parseInt(elem.parentElement.parentElement.dataset['number'])||0;
+		
+		Modal.confirm(
+			"Delete Frame Property Value",
+			"Are you sure you want to delete frame property value #"+(num+1)+"?",
+			(function() {this.doRemoveFramePropertyValue(name, num); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"medium",
+			true
+		);
+	}
+	doRemoveFramePropertyValue(name, id) {
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		state.removeFrameProperty(name, id);
+		let container = document.getElementById('fprop_'+name).children[1].children[0].children[0]
+		let elem = container.children[id];
+		elem.remove();
+		
+		for(let i = 0; i < container.children; i++) {
+			container.children[i].dataset['number'] = i;
+		}
 	}
 	
 	updateMode() {
@@ -2136,7 +2557,7 @@ class SoundsTab extends UITab {
 		button.classList.add('modern', 'tiny');
 		button.innerText = '-';
 		button.title = "Remove Sound Pool";
-		button.dataset['action'] = "deleteTag";
+		button.dataset['action'] = "deletePool";
 		cell4.append(button);
 		newPool.append(cell4);
 		

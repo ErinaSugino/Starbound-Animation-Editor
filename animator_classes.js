@@ -330,7 +330,7 @@ class StateType {
 	#_id = null;
 	
 	// List of allowed custom properties
-	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
+	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true,persistentSoundStopTime: true};
 	
 	constructor(name, data = {}) {
 		this.#_id = IDManager.getId(this);
@@ -397,6 +397,7 @@ class StateType {
 		return true;
 	}
 	
+	static allowedProperties() {return StateType.#_allowedProperties;}
 	get properties() {return Object.assign({}, this._properties);}
 	getProperty(name) {return this._properties[name];}
 	setProperty(name, val) {
@@ -435,7 +436,8 @@ class State {
 	static get END() {return 2;}
 	
 	// List of allowed custom properties
-	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true};
+	static #_allowedProperties = {immediateSound: false,immediateSoundRangeMultiplier: true,persistentSound: false,persistentSoundRangeMultiplier: true,persistentSoundStopTime: true};
+	static #_allowedFrameProperties = {immediateSound: false};
 	
 	constructor(name, data = {}) {
 		this.#_id = IDManager.getId(this);
@@ -515,15 +517,16 @@ class State {
 	}
 	removeProperty(name) {return delete this._properties[name];}
 	
+	static allowedFrameProperties() {return State.#_allowedFrameProperties;}
 	get frameProperties() {return Object.assign({}, this._frameProperties);}
 	getFrameProperty(name) {return this._frameProperties[name];}
 	addFrameProperty(name, val) {
-		let allowed = Object.keys(State.#_allowedProperties);
+		let allowed = Object.keys(State.#_allowedFrameProperties);
 		let i = allowed.indexOf(name);
 		if(i < 0) return false;
 		if(this._frameProperties[name] == undefined) this._frameProperties[name] = [];
 		
-		val = State.#_allowedProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
+		val = State.#_allowedFrameProperties[allowed[i]] ? (parseFloat(val) || 1) : String(val);
 		
 		this._frameProperties[name].push(val);
 		return true;
@@ -534,6 +537,11 @@ class State {
 		this._frameProperties[name].splice(id, 1);
 		if(this._frameProperties[name].length > 0) return true;
 		else return delete this._frameProperties[name];
+	}
+	deleteFrameProperty(name) {
+		id = parseInt(id) || 0;
+		if(!this._frameProperties[name]) return false;
+		return delete this._frameProperties[name];
 	}
 	
 	output() {

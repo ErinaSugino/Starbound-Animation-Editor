@@ -131,7 +131,11 @@ window.onError = function(msg, url, line, col, err) {
 	</div>
 	<div class="row">
 		<label class="description">Properties:</label>
-		<div id="properties"></div>
+		<div class="list">
+			<div class="properties" id="properties"></div>
+			<div class="warning">No properties defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addPropertyType" title="Add new property&#10;for this state type">+</button></div>
+		</div>
 	</div>
 	<div class="row">
 		<div class="expandable">
@@ -159,9 +163,19 @@ window.onError = function(msg, url, line, col, err) {
 	<div class="row" id="mode_content"></div>
 	<div class="row">
 		<label class="description">Properties:</label>
+		<div class="list">
+			<div class="properties" id="properties"></div>
+			<div class="warning">No properties defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addPropertyState" title="Add new property&#10;for this state">+</button></div>
+		</div>
 	</div>
 	<div class="row">
 		<label class="description">Frame Properties:</label>
+		<div class="list">
+			<div class="frameProperties" id="frameProperties"></div>
+			<div class="warning">No frame properties defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addFrameProperty" title="Add new frame property&#10;for this state">+</button></div>
+		</div>
 	</div>
 </div>
 </template>

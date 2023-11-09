@@ -19,11 +19,12 @@ var Modal = {
 		else this.openOverlay(fetched);
 		return true;
 	},
-	confirm: function(title, content, confirmCallback, cancleCallback = null, confirmText = "Confirm", cancleText = "Cancle", size = "medium", red = false) {
+	confirm: function(title, content, confirmCallback, cancleCallback = null, confirmText = "Confirm", cancleText = "Cancle", size = "medium", red = false, allowBlurClose = true) {
 		this.modalId++;
 		let modal = document.createElement('div');
 		if(!size.toLowerCase().match(/small|medium|large/)) size = 'medium';
-		modal.classList.add('modal', size, 'noClose');
+		modal.classList.add('modal', size, 'confirm');
+		if(!allowBlurClose) modal.classList.add('noClose');
 		if(red) modal.classList.add('red');
 		
 		let titleElem = document.createElement('div');
@@ -59,6 +60,11 @@ var Modal = {
 			try {if(cancleCallback != null) cont = cancleCallback();} catch(err) {console.error(err);}
 			if(cont) Modal.manClose();
 		});
+		modal.addEventListener('modalblur', function(e){
+			let cont = true;
+			try {if(cancleCallback != null) cont = cancleCallback();} catch(err) {console.error(err);}
+			if(cont) Modal.manClose();
+		});
 		footer.append(cancleButton);
 		modal.append(footer);
 		if(this.isOpen) this.appendOverlayHtml(modal);
@@ -66,8 +72,12 @@ var Modal = {
 		return true;
 	},
 	checkClose: function(e) {
-		if(document.querySelector('#overlay .modal:first-child').classList.contains('noClose')) return;
-		this.manClose();
+		let elem = document.querySelector('#overlay .modal:first-child')
+		if(elem.classList.contains('noClose')) return;
+		if(elem.classList.contains('confirm')) {
+			let ev = new CustomEvent('modalblur', {bubble: false});
+			elem.dispatchEvent(ev);
+		} else this.manClose();
 	},
 	manClose: function() {
 		if(this.openModals <= 1) {
@@ -206,6 +216,87 @@ var ToastModal = {
 	}
 };
 
+/** KEY HANDLER STUFF */
+class KeyboardHandler {
+	constructor() {
+		this._boundHandleKeyDown = this.handleKeyDown.bind(this);
+		this._boundHandleKeyUp = this.handleKeyUp.bind(this);
+		document.addEventListener('keydown', this._boundHandleKeyDown);
+		document.addEventListener('keyup', this._boundHandleKeyUp);
+		
+		this.init();
+	}
+	destroy() {
+		document.removeEventListener('keydown', this._boundHandleKeyDown);
+		document.removeEventListener('keyup', this._boundHandleKeyUp);
+	}
+	
+	init() {
+		this._registeredEvents = {};
+	}
+	
+	registerKey(key, func, mods = {}, message = null) {
+		if(!this._registeredEvents[key]) this._registeredEvents[key] = [];
+		let ev = {callback: func, mods: mods, message: message};
+		if(this._registeredEvents[key].indexOf(ev) != -1) return false;
+		this._registeredEvents[key].push(ev);
+		return true;
+	}
+	deregisterKey(key, func, mods = {}) {
+		if(!this._registeredEvents[key]) return false;
+		for(let i = 0; i < this._registeredEvents[key].length; i++) {
+			let ev = this._registeredEvents[key][i];
+			if(i.func == func && i.mods == mods) {this._registeredEvents[key].splice(i, 1); return true;}
+		}
+		return false;
+	}
+	
+	deregisterAll() {this._registeredEvents = {};}
+	
+	handleKeyDown(e) {
+		if(e.target.nodeName == 'INPUT' || e.target.nodeName == 'TEXTAREA') return true;
+		let evs = this.checkForEvent(e);
+		if(evs === false) return;
+		e.preventDefault();
+		for(let i = 0; i < evs.length; i++) {
+			let ev = evs[i];
+			try {
+				let res = ev.callback(e.code);
+				if(ev.message != null && res) {
+					if(res === true) ToastModal.open(ev.message.text, false, ev.message.time);
+					else ToastModal.open(ev.message.text+': '+res, false, ev.message.time);
+				}
+			}
+			catch(err){console.warn(err);}
+		}
+	}
+	handleKeyUp(e) {
+		if(e.target.nodeName == 'INPUT' || e.target.nodeName == 'TEXTAREA') return true;
+		if(this.checkForEvent(e) !== false) e.preventDefault();
+	}
+	
+	checkForEvent(e) {
+		let key = e.code, shift = e.shiftKey, ctrl = e.ctrlKey, alt = e.altKey;
+		if(!this._registeredEvents[key]) return false;
+		let res = [];
+		for(let i = 0; i < this._registeredEvents[key].length; i++) {
+			let ev = this._registeredEvents[key][i];
+			if(!ev.mods) ev.mods = {};
+			if(!ev.mods.ctrl == ctrl || !ev.mods.shift == shift || !ev.mods.alt == alt) continue;
+			res.push({callback: ev.callback, message: ev.message});
+		}
+		return res.length == 0 ? false : res;
+	}
+};
+
+var keyHandler = new KeyboardHandler();
+
+function keyboardImport(key) {Modal.confirm("Import Project","<div class='inputFile'><input type='file' class='fileInput' id='fileInput' required /><label for='fileInput'>Click or drop file here</label></div>",loadFile,null,"Load","Cancle","small",false);}
+keyHandler.registerKey('KeyI', keyboardImport, {shift: true});
+function keyboardNew(key) {Modal.confirm("New Project", "Do you really want to create a new project?<br><br>If data is already loaded it will be erased!", () => {animator.destroy(); return true;}, null, "Create", "Abort", "small", true);}
+keyHandler.registerKey('KeyN', keyboardNew, {shift: true});
+keyHandler.registerKey('KeyM', () => {document.getElementById('menu').classList.toggle('active');});
+
 function getStorage(key) {
 	let storage = localStorage;
 	if(!storage) return '';
@@ -291,6 +382,18 @@ function doExport() {
 	URL.revokeObjectURL(downloadURI);
 	
 	return true;
+}
+
+function openHelp() {
+	Modal.open(
+		"Starbound Animation Editor",
+		"A web-based editor to easily create and edit Starbound's .animation files.<br>"+
+		"Import an existing .animation file or start from scratch by adding things through the tabs in the center.<br><br>"+
+		"<b>Hotkeys:</b><br>"+
+		"<span class=\"highlight\">M</span> - Open sidebar menu<br>"+
+		"<span class=\"highlight\">Shift + I</span> - Import project<br>"+
+		"<span class=\"highlight\">Shift + N</span> - New project"
+	);
 }
 
 document.addEventListener("DOMContentLoaded", startup);
