@@ -47,9 +47,7 @@ window.onError = function(msg, url, line, col, err) {
 				</div>
 				<div class="tab" id="parts">
 					<div class="navbar"></div>
-					<div class="tab_content">
-						Parts
-					</div>
+					<div class="tab_content"></div>
 				</div>
 				<div class="tab" id="states">
 					<div class="navbar"></div>
@@ -124,6 +122,61 @@ window.onError = function(msg, url, line, col, err) {
 	</div>
 </div>
 
+<template id="fragment_part">
+<div>
+	<div class="row">
+		<label class="description">Anchor:</label><select id="anchorPart" class="modern medium"><option value="-1">None</option></select>
+	</div>
+	<div class="row">
+		<label class="description">Centered:</label><input type="checkbox" class="checkbox" id="centered" value="1" /><label class="checkbox" for="centered"></label>
+	</div>
+	<div class="row">
+		<label class="description">Image:</label><input id="image" type="text" class="textfield medium" placeholder="Image path" title="Image path&#10;of this part&#10;Can be empty" />
+	</div>
+	<div class="row">
+		<label class="description">Offset:</label><input id="offset1" type="number" class="textfield split" step="0.25" placeholder="Offset X" title="X Offset&#10;of this part&#10;Can be empty" /><input id="offset2" type="number" class="textfield split" step="0.25" placeholder="Offset Y" title="Y Offset&#10;of this part&#10;Can be empty" />
+	</div>
+	<div class="row">
+		<label class="description">Z-Level:</label><input id="zLevel" type="number" class="textfield medium" min="0" step="1" max="999" placeholder="Z-Level" title="Z-Level&#10;of this part" />
+	</div>
+	<div class="row">
+		<label class="description">Transf. Groups:</label>
+		<div class="list">
+			<div class="groups" id="groups"></div>
+			<div class="warning">No transformation groups defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addGroup" title="Add new transformation&#10;group for this part">+</button></div>
+		</div>
+	</div>
+	<div class="row">
+		<label class="description">Part States:</label>
+		<div class="list">
+			<div id="partStates" class="partStates"></div>
+			<div class="warning">No states defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addPartState" title="Add new state&#10;to this part">+</button></div>
+		</div>
+	</div>
+</div>
+</template>
+<template id="fragment_animation_state">
+<div>
+	<div class="row">
+		<label class="description">Properties:</label>
+		<div class="list">
+			<div class="properties" id="properties"></div>
+			<div class="warning">No properties defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addProperty" title="Add new property&#10;for this animation state">+</button></div>
+		</div>
+	</div>
+	<div class="row">
+		<label class="description">Frame Properties:</label>
+		<div class="list">
+			<div class="frameProperties" id="frameProperties"></div>
+			<div class="warning">No frame properties defined.</div>
+			<div class="sticky_controls"><button class="modern tiny" data-action="addFrameProperty" title="Add new frame property&#10;for this animation state">+</button></div>
+		</div>
+	</div>
+</div>
+</template>
 <template id="fragment_stateType">
 <div>
 	<div class="row">

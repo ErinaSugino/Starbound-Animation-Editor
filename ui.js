@@ -446,7 +446,1163 @@ class TagsTab extends UITab {
 }
 
 class PartsTab extends UITab {
+	constructor(elem) {
+		super(elem);
+		this._animator = animator;
+		
+		this._boundHandleAction = this.handleAction.bind(this);
+		this._boundHandleDblClick = this.handleDblClick.bind(this);
+		this._boundHandleChange = this.handleChange.bind(this);
+		this._content.addEventListener('click', this._boundHandleAction);
+		this._content.addEventListener('dblclick', this._boundHandleDblClick);
+		this._content.addEventListener('change', this._boundHandleChange);
+		
+		this._boundBuildNavbar = this.buildNavbar.bind(this);
+		this._boundBuildLayeredContent = this.buildLayeredContent.bind(this);
+		
+		this._contentList = [];
+		
+		if(elem.classList.contains('active')) this.onLoad();
+	}
 	
+	destroy() {
+		this._content.removeEventListener('click', this._boundHandleAction);
+		this._content.removeEventListener('dblclick', this._boundHandleDblClick);
+		this._content.removeEventListener('change', this._boundHandleChange);
+		this._content.innerHTML = '';
+		this._contentList = [];
+		this._animator.removeEventListener('load', this._boundBuildNavbar);
+		this._animator.removeEventListener('load', this._boundBuildLayeredContent);
+		this._animator = null;
+		super.destroy();
+	}
+	
+	onLoad() {
+		super.onLoad();
+		this._animator.addEventListener('load', this._boundBuildNavbar);
+		this._animator.addEventListener('load', this._boundBuildLayeredContent);
+		this.buildNavbar();
+		this.buildLayeredContent();
+	}
+	
+	onUnload() {
+		this._content.innerHTML = '';
+		this._contentList = [];
+		this._nests = [];
+		this._animator.removeEventListener('load', this._boundBuildNavbar);
+		this._animator.removeEventListener('load', this._boundBuildLayeredContent);
+		super.onUnload();
+	}
+	
+	handleAction(e) {
+		let target = e.target;
+		if(target == null) return false;
+		
+		if(target.tagName == "BUTTON") {
+			let action = target.dataset['action'];
+			if(action == "addPart") this.addPart(target);
+			else if(action == "editPart") this.openPart(target);
+			else if(action == "deletePart") this.removePart(target);
+			else if(action == "addGroup") this.addGroup(target);
+			else if(action == "deleteGroup") this.removeGroup(target);
+			else if(action == "addPartState") this.addPartState(target);
+			else if(action == "editPartState") this.openPartState(target);
+			else if(action == "deletePartState") this.removePartState(target);
+			else if(action == "addAnimationState") this.addAnimationState(target);
+			else if(action == "editAnimationState") this.openAnimationState(target);
+			else if(action == "deleteAnimationState") this.removeAnimationState(target);
+			else if(action == "addProperty") this.addProperty(target);
+			else if(action == "deleteProperty") this.removeProperty(target);
+			else if(action == "addFrameProperty") this.addFrameProperty(target);
+			else if(action == "deleteFrameProperty") this.removeFrameProperty(target);
+			else if(action == "addFramePropertyValue") this.addFramePropertyValue(target);
+			else if(action == "deleteFramePropertyValue") this.removeFramePropertyValue(target);
+		}
+		
+		return true;
+	}
+	
+	handleDblClick(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(!target.classList.contains('editable')) return false;
+		
+		if(target.parentElement.classList.contains('stateType')) this.renameStateType(target);
+		else if(target.parentElement.classList.contains('state')) this.renameState(target);
+	}
+	
+	handleChange(e) {
+		
+	}
+	
+	updateInput(e) {
+		let elem = e.target;
+		let id = elem.id;
+		let value = elem.value;
+		let checked = elem.checked || false;
+		
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[partId];
+		
+		switch(id) {
+			case 'centered': part.centered = checked; break;
+			case 'image': part.image = value == "" ? null : value; break;
+			case 'offset1': case 'offset2':
+				let o1 = document.getElementById('offset1').value;
+				let o2 = document.getElementById('offset2').value;
+				if(o1 == "" && o2 == "") part.offset = null;
+				else {
+					o1 = parseFloat(o1)||0;
+					o2 = parseFloat(o2)||0;
+					part.offset = [o1,o2];
+				}
+				break;
+			case 'zLevel': part.zLevel = value == "" ? null : value; break;
+		}
+	}
+	updateSelect(e) {
+		let elem = e.target;
+		let id = elem.id;
+		let value = parseInt(elem.value)||0;
+		
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[partId];
+		
+		switch(id) {
+			case 'anchorPart': part.anchorPart = value == -1 ? null : value; break;
+		}
+	}
+	
+	buildLayeredContent(data = null) {
+		this._content.innerHTML = '';
+		this._contentList = [];
+		
+		if(data == null) this.loadList();
+		else if(data.layer == 1) this.loadPart(data.id);
+		else if(data.layer == 2) this.loadPartState(data.id, data.refId);
+		else if(data.layer == 3) this.loadAnimationState(data.id, data.refId, data.subId);
+		else this.loadList();
+	}
+	loadList() {
+		this._contentElem = document.createElement('div');
+		this._contentElem.classList.add('parts');
+		this._content.append(this._contentElem);
+		
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = 'No parts defined.';
+		this._content.append(warning);
+		
+		let controls = document.createElement('div');
+		controls.classList.add('sticky_controls');
+		let button = document.createElement('button');
+		button.type = 'button';
+		button.classList.add('modern', 'tiny');
+		button.title = "Add new\npart";
+		button.innerText = '+';
+		button.dataset['action'] = 'addPart';
+		controls.append(button);
+		this._content.append(controls);
+		
+		for(let i = 0; i < this._animator._parts.length; i++) {
+			this.doAddPart(this._animator._parts[i].name, i);
+		}
+	}
+	openPart(elem) {
+		let partId = parseInt(elem.parentElement.parentElement.dataset['id']) || 0; // Button -> cell -> Part (with data)
+		let name = this._animator._parts[partId].name;
+		
+		this.addNavigationLayer("Part: "+name, {layer: 1, id: partId});
+	}
+	
+	loadPart(partId) {
+		this._contentElem = null;
+		let template = document.getElementById('fragment_part').content;
+		let clone = document.importNode(template, true);
+		let part = this._animator._parts[partId];
+		
+		clone.children[0].dataset['partId'] = partId;
+		
+		if(part.centered) clone.getElementById('centered').checked = true;
+		if(part.image != null) clone.getElementById('image').value = part.image;
+		let offset = part.offset;
+		if(offset != null) {
+			clone.getElementById('offset1').value = offset[0];
+			clone.getElementById('offset2').value = offset[1]
+		}
+		if(part.zLevel != null) clone.getElementById('zLevel').value = part.zLevel;
+		let select = clone.getElementById('anchorPart');
+		let parts = [];
+		let partIds = {};
+		for(let i = 0; i < this._animator._parts.length; i++) {
+			if(i == partId) continue;
+			let part = this._animator._parts[i];
+			parts.push(part.name);
+			partIds[part.name] = part.id;
+		}
+		parts.sort();
+		for(let i = 0; i < parts.length; i++) {
+			let option = document.createElement('option');
+			option.value = part.id;
+			option.innerText = parts[i];
+			if(part.anchorPart != null && part.anchorPart == partIds[parts[i]]) option.selected = true;
+			select.appendChild(option);
+		}
+		
+		let inputs = clone.children[0].getElementsByTagName('input');
+		for(let i = 0; i < inputs.length; i++) {
+			if(inputs[i].type == "checkbox") inputs[i].addEventListener('change', this.updateInput.bind(this));
+			else inputs[i].addEventListener('blur', this.updateInput.bind(this));
+		}
+		let selects = clone.children[0].getElementsByTagName('select');
+		for(let i = 0; i < selects.length; i++) {selects[i].addEventListener('change', this.updateSelect.bind(this));}
+		
+		this._content.appendChild(clone);
+		
+		/* TODO transformation groups, part states */
+		let groups = part.groups;
+		for(let i = 0; i < groups.length; i++) {
+			this.doAddGroup(groups[i], false);
+		}
+		let states = part.partStates;
+		for(let i = 0; i < states.length; i++) {
+			this.doAddPartState(states[i].id, i);
+		}
+	}
+	openPartState(elem) {
+		let partId = parseInt(this._content.children[0].dataset['partId']) || 0;
+		let stateId = parseInt(elem.parentElement.parentElement.dataset['sid']) || 0; //Button -> cell -> state (with data)
+		let name = IDManager.getById(stateId).referenceName();
+		
+		this.addNavigationLayer("Part State: "+name, {layer: 2, id: partId, refId: stateId});
+	}
+	
+	loadPartState(partId, stateId) {
+		let container = document.createElement('div');
+		container.dataset['partId'] = partId;
+		container.dataset['partStateId'] = stateId;
+		this._contentElem = document.createElement('div');
+		this._contentElem.classList.add('animationStates');
+		container.append(this._contentElem);
+		
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = 'No animation states defined.';
+		container.append(warning);
+		
+		let controls = document.createElement('div');
+		controls.classList.add('sticky_controls');
+		let button = document.createElement('button');
+		button.type = 'button';
+		button.classList.add('modern', 'tiny');
+		button.title = "Add new\nanimation state";
+		button.innerText = '+';
+		button.dataset['action'] = 'addAnimationState';
+		controls.append(button);
+		container.append(controls);
+		this._content.append(container);
+		
+		let states = IDManager.getById(stateId).animationStates;
+		for(let i = 0; i < states.length; i++) {
+			this.doAddAnimationState(states[i].id, i);
+		}
+	}
+	openAnimationState(elem) {
+		let partId = parseInt(this._content.children[0].dataset['partId']) || 0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId']) || 0;
+		let animId = parseInt(elem.parentElement.parentElement.dataset['aid']) || 0; //Button -> cell -> anim state (with data)
+		let name = IDManager.getById(animId).referenceName();
+		
+		this.addNavigationLayer("Anim. State: "+name, {layer: 3, id: partId, refId: stateId, subId: animId});
+	}
+	
+	loadAnimationState(partId, stateId, animId) {
+		this._contentElem = null;
+		this._content.innerHTML = "";
+		let template = document.getElementById('fragment_animation_state').content;
+		let clone = document.importNode(template, true);
+		let state = IDManager.getById(animId);
+		
+		clone.children[0].dataset['partId'] = partId;
+		clone.children[0].dataset['partStateId'] = stateId;
+		clone.children[0].dataset['animStateId'] = animId;
+		
+		this._content.appendChild(clone);
+		
+		for(let i in state.properties) {
+			this.doAddProperty(i, state.properties[i]);
+		}
+		for(let i in state.frameProperties) {
+			this.doAddFrameProperty(i, state.frameProperties[i]);
+		}
+	}
+	
+	addPart() {
+		Modal.confirm(
+			"Add Part",
+			"Enter name of the new part.<br><br><input class='textfield large' type='text' id='partName' placeholder='Part Name' />",
+			(function() {
+				let name = document.getElementById('partName').value;
+				if(name != "") {
+					this.checkAddPart(name);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddPart(name) {
+		let isTaken = false;
+		for(let i = 0; i < this._animator._parts.length; i++) {
+			if(this._animator._parts[i].name == name) {isTaken = true; break;}
+		}
+		
+		if(isTaken) ToastModal.open("Part name taken", true);
+		else this.doAddPart(name);
+	}
+	doAddPart(name, refId=-1) {
+		if(refId == -1) {this._animator.addPart(name); refId = this._animator._parts.length - 1;}
+		let part = this._animator._parts[refId];
+		
+		let newPart = document.createElement('div');
+		newPart.classList.add('part');
+		newPart.dataset['name'] = name;
+		newPart.dataset['id'] = refId;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'editable');
+		cell1.innerText = name;
+		newPart.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow', 'right');
+		cell2.innerHTML = "<span>Anchor: "+part.anchorPartName()+"</span><br><span>Centered: "+(part.centered?'Yes':'No')+"</span>";
+		newPart.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit Part";
+		button.dataset['action'] = "editPart";
+		cell3.append(button);
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Part";
+		button.dataset['action'] = "deletePart";
+		cell3.append(button);
+		newPart.append(cell3);
+		
+		this._contentElem.append(newPart);
+		this._contentList.push(name);
+	}
+	
+	renamePart(elem) {
+		let orgValue = elem.parentElement.dataset['name'];
+		let id = this._contentList.indexOf(orgValue);
+		if(id == -1) return;
+		
+		let input = document.createElement('input');
+		input.type = "text";
+		input.classList.add('textfield', 'large');
+		input.placeholder = "Part Name";
+		input.value = orgValue;
+		let self = this;
+		input.addEventListener('blur', function() {
+			let name = this.value;
+			if(name == orgValue || name == "") this.parentElement.innerText = orgValue;
+			else self.checkRenamePart(id, name);
+		});
+		input.addEventListener('keydown', function(e) {if(e.key == "Enter") this.blur();});
+		elem.replaceChildren(input);
+		input.focus();
+	}
+	checkRenamePart(id, name) {
+		let isTaken = false;
+		for(let i = 0; i < this._animator._parts.length; i++) {
+			if(this._animator._parts[i].name == name) {isTaken = true; break;}
+		}
+		if(isTaken) {
+			if(this._contentElem) {
+				let orgName = this._contentElem.children[id].dataset['name'];
+				this._contentElem.children[id].children[1].innerText = orgName;
+			}
+			ToastModal.open("Part name taken", true);
+		} else this.doRenamePart(id, name);
+	}
+	doRenamePart(id, name) {
+		if(id < 0) return;
+		
+		if(this._contentElem) {
+			this._contentElem.children[id].children[1].innerText = name;
+			this._contentElem.children[id].dataset['name'] = name;
+		}
+		this._animator._parts[id].name = name;
+	}
+	
+	removePart(elem) {
+		let name = elem.parentElement.parentElement.dataset['name']; // Button -> Cell -> Part (with data)
+		let id = this._contentList.indexOf(name);
+		if(id == -1) return;
+		
+		Modal.confirm(
+			"Delete Part",
+			"Are you sure you want to delete the part \""+name+"\"?<br><br><b>Every part state and reference associated with it will be removed too!</b>",
+			(function() {this.doRemovePart(id); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveStateType(id) {
+		this._contentElem.children[id].remove();
+		this._animator.removePart(id);
+		this._contentList.splice(id, 1);
+		
+		for(let i = 0; i < this._contentElem.children.length; i++) {
+			this._contentElem.children[i].dataset['id'] = i;
+		}
+	}
+	
+	addGroup(elem) {
+		let partId = this._content.children[0].dataset['partId'];
+		let part = this._animator._parts[partId];
+		
+		let currentGroups = part.groups;
+		let options = "";
+		
+		for(let i = 0; i < this._animator._transformationGroups.length; i++) {
+			let g = this._animator._transformationGroups[i];
+			let id = g.id;
+			if(currentGroups.indexOf(id) != -1) continue;
+			options += "<option value='"+id+"'>"+g.name+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Part",
+			"Select transformation group to add to this part.<br><br><select class='modern large' id='tgroup'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('tgroup').value;
+				if(value != "" && value != null) {
+					this.checkAddGroup(parseInt(value)||0);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddGroup(id) {
+		if(id == null) return;
+		
+		let pid = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[id];
+		
+		if(!IDManager.getById(id) instanceof Group) {ToastModal.open("Invalid<br>transformation group", true); return;}
+		
+		if(part.groups.indexOf(id) != -1) ToastModal.open("Group already set", true);
+		else this.doAddGroup(id);
+	}
+	doAddGroup(id, apply=true) {
+		let partId = this._content.children[0].dataset['partId'];
+		let part = this._animator._parts[partId];
+		if(apply) part.addGroup(id);
+		
+		let name = IDManager.getById(id).name || "Unknown";
+		
+		let container = document.getElementById('groups');
+		let newGroup = document.createElement('div');
+		newGroup.classList.add('tgroup');
+		newGroup.dataset['gid'] = id;
+		newGroup.dataset['id'] = container.children.length;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		cell1.innerText = name;
+		newGroup.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove\nTransformation Group";
+		button.dataset['action'] = "deleteGroup";
+		cell2.append(button);
+		newGroup.append(cell2);
+		
+		container.append(newGroup);
+	}
+	
+	removeGroup(elem) {
+		let gid = parseInt(elem.parentElement.parentElement.dataset['gid'])||0; // Button -> Cell -> Group (with data)
+		let id = parseInt(elem.parentElement.parentElement.dataset['id'])||0;
+		let name = IDManager.getById(gid).name || "Unknown";
+		
+		Modal.confirm(
+			"Delete Group",
+			"Are you sure you want to remove the transformation group \""+name+"\" from this part?",
+			(function() {this.doRemoveGroup(id, gid); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveGroup(id, gid) {
+		let partId = this._content.children[0].dataset['partId'];
+		let part = this._animator._parts[partId];
+		part.removeGroup(gid);
+		
+		let container = document.getElementById('groups');
+		container.children[id].remove();
+		
+		for(let i = 0; i < container.children.length; i++) {
+			container.children[i].dataset['id'] = i;
+		}
+	}
+	
+	addPartState() {
+		let partId = this._content.children[0].dataset['partId'];
+		let part = this._animator._parts[partId];
+		
+		let currentStates = part.partStates;
+		let options = "";
+		
+		for(let i = 0; i < this._animator._stateTypes.length; i++) {
+			let s = this._animator._stateTypes[i];
+			let exists = false;
+			for(let j = 0; j < currentStates.length; j++) {
+				if(currentStates[j].reference == s.id) {exists = true; break;}
+			}
+			if(exists) continue;
+			options += "<option value='"+s.id+"'>"+s.name+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add State Type",
+			"Select state type to add to this part.<br><br><select class='modern large' id='stateType'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('stateType').value;
+				if(value != "" && value != null) {
+					this.checkAddPartState(parseInt(value)||0);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddPartState(id) {
+		if(id == null) return;
+		
+		let pid = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[id];
+		
+		if(!IDManager.getById(id) instanceof StateType) {ToastModal.open("Invalid state type", true); return;}
+		
+		let currentStates = part.partStates;
+		for(let i = 0; i < currentStates.length; i++) {
+			if(currentStates[i].reference == id) {ToastModal.open("State type<br>already set", true); return;}
+		}
+		this.doAddPartState(id);
+	}
+	doAddPartState(id, refId=-1) {
+		let pid = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[pid];
+		
+		if(refId == -1) {part.addPartState(id); refId = part.partStates.length - 1;}
+		let state = part.partStates[refId];
+		id = state.id;
+		
+		let container = document.getElementById('partStates');
+		let newState = document.createElement('div');
+		newState.classList.add('partState');
+		newState.dataset['sid'] = id;
+		newState.dataset['id'] = refId;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell');
+		cell1.innerText = state.referenceName();
+		newState.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow', 'right');
+		cell2.innerHTML = "<span>States: "+state.animationStates.length+"</span>";
+		newState.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit Part State";
+		button.dataset['action'] = "editPartState";
+		cell3.append(button);
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Part State";
+		button.dataset['action'] = "deletePartState";
+		cell3.append(button);
+		newState.append(cell3);
+		
+		container.append(newState);
+	}
+	
+	removePartState(elem) {
+		let id = parseInt(elem.parentElement.parentElement.dataset['id'])||0; // Button -> Cell -> Group (with data)
+		let name = IDManager.getById(id).reference || "Unknown";
+		
+		Modal.confirm(
+			"Delete State Type",
+			"Are you sure you want to remove the state type \""+name+"\" from this part?<br><br><b>All associated animation data will be removed too!</b>",
+			(function() {this.doRemovePartState(id); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemovePartState(id) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let part = this._animator._parts[partId];
+		part.removePartState(id);
+		
+		let container = document.getElementById('partStates');
+		container.children[id].remove();
+		
+		for(let i = 0; i < container.children.length; i++) {
+			container.children[i].dataset['id'] = i;
+		}
+	}
+	
+	addAnimationState() {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let state = IDManager.getById(stateId);
+		let refState = IDManager.getById(state.reference);
+		
+		let currentStates = state.animationStates;
+		let refStates = refState.states;
+		let options = "";
+		
+		for(let i = 0; i < refStates.length; i++) {
+			let as = refStates[i];
+			let exists = false;
+			for(let j = 0; j < currentStates.length; j++) {
+				if(currentStates[j].reference == as.id) {exists = true; break;}
+			}
+			if(exists) continue;
+			options += "<option value='"+as.id+"'>"+as.name+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Anim. State",
+			"Select animation state to add to this part state.<br><br><select class='modern large' id='animState'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('animState').value;
+				if(value != "" && value != null) {
+					this.checkAddAnimationState(parseInt(value)||0);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddAnimationState(id) {
+		if(id == null) return;
+		
+		let sid = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let state = IDManager.getById(sid);
+		
+		if(!IDManager.getById(id) instanceof State) {ToastModal.open("Invalid<br>animation state", true); return;}
+		
+		let currentStates = state.animationStates;
+		for(let i = 0; i < currentStates.length; i++) {
+			if(currentStates[i].reference == id) {ToastModal.open("Anim. state<br>already set", true); return;}
+		}
+		this.doAddAnimationState(id);
+	}
+	doAddAnimationState(id, refId=-1) {
+		let sid = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let state = IDManager.getById(sid);
+		
+		if(refId == -1) {state.addAnimationState(id); refId = state.animationStates.length - 1;}
+		let aState = state.animationStates[refId];
+		id = aState.id;
+		
+		let newState = document.createElement('div');
+		newState.classList.add('part');
+		newState.dataset['aid'] = aState.id;
+		newState.dataset['id'] = refId;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell');
+		cell1.innerText = aState.referenceName();
+		newState.append(cell1);
+		
+		let properties = Object.keys(aState.properties).join(', ');
+		if(properties == "") properties = '---';
+		let fproperties = Object.keys(aState.frameProperties).join(', ');
+		if(fproperties == "") fproperties = '---';
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow', 'right');
+		cell2.innerHTML = "<span>Properties: "+properties+"</span><br><span>Frame Properties: "+fproperties+"</span>";
+		newState.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '✎';
+		button.title = "Edit Animation State";
+		button.dataset['action'] = "editAnimationState";
+		cell3.append(button);
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Animation State";
+		button.dataset['action'] = "deleteAnimationState";
+		cell3.append(button);
+		newState.append(cell3);
+		
+		this._contentElem.append(newState);
+	}
+	
+	removeAnimationState(elem) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let state = IDManager.getById(stateId);
+		
+		let aid = parseInt(elem.parentElement.parentElement.dataset['aid'])||0; // Button -> Cell -> Part (with data)
+		let id = parseInt(elem.parentElement.parentElement.dataset['id'])||0;
+		let name = IDManager.getById(aid).name;
+		
+		Modal.confirm(
+			"Delete Part",
+			"Are you sure you want to delete the animation state \""+name+"\"?<br><br><b>All associated data will be removed too!</b>",
+			(function() {this.doRemoveAnimationState(id); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveAnimationState(id) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let state = IDManager.getById(stateId);
+		
+		state.removeAnimationState(id);
+		this._contentElem.children[id].remove();
+		
+		for(let i = 0; i < this._contentElem.children.length; i++) {
+			this._contentElem.children[i].dataset['id'] = i;
+		}
+	}
+	
+	addProperty() {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		let properties = state.properties;
+		let allowed = {image: 'string', offset: 'array', zLevel: 'float'};
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(properties, i) && document.getElementById('prop_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Property",
+			"Select property to add.<br><br><select class='modern large' id='propertyList'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('propertyList').value;
+				if(value != "" && value != null) {
+					this.checkAddProperty(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddProperty(name = null) {
+		if(name == null) return;
+		
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		if(!Object.hasOwn({image: 'string', offset: 'array', zLevel: 'number'}, name)) {ToastModal.open("Invalid property", true); return;}
+		
+		if(document.getElementById('prop_'+name) != null) ToastModal.open("Property already set", true);
+		else this.doAddProperty(name);
+	}
+	doAddProperty(name, val = null) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		let varTypes = {image: 'string', offset: 'array', zLevel: 'float'};
+		let type = varTypes[name];
+		
+		let newProperty = document.createElement('div');
+		newProperty.classList.add('property');
+		newProperty.id = "prop_"+name;
+		newProperty.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		let input = document.createElement('input');
+		input.classList.add('textfield', 'medium');
+		if(type == 'number') {
+			input.type = "number";
+			input.step = "1";
+			input.min = "0";
+			input.value = parseInt(val)||0;
+			input.placeholder = "Value";
+			input.title = name+" - Value";
+			input.id = "prop_"+name+"_val";
+		} else if(type == "array") {
+			input.classList.remove('medium');
+			input.classList.add('split');
+			input.type = "number";
+			input.step = "0.25";
+			input.value = parseFloat(val[0])||0;
+			input.placeholder = "X Offset";
+			input.title = name+" - X";
+			input.id = "prop_"+name+"_val1";
+			input.addEventListener('blur', this.handleProperty.bind(this));
+			cell1.append(input);
+			input = document.createElement('input');
+			input.classList.add('textfield', 'split');
+			input.type = "number";
+			input.step = "0.25";
+			input.value = parseFloat(val[1])||0;
+			input.placeholder = "Y Offset";
+			input.title = name+" - Y";
+			input.id = "prop_"+name+"_val2";
+		} else {
+			input.type = "text";
+			input.value = val || "";
+			input.placeholder = "Value";
+			input.title = name+" - Value";
+			input.id = "prop_"+name+"_val";
+		}
+		input.addEventListener('blur', this.handleProperty.bind(this));
+		cell1.append(input);
+		newProperty.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Property";
+		button.dataset['action'] = "deleteProperty";
+		cell2.append(button);
+		newProperty.append(cell2);
+		
+		document.getElementById('properties').append(newProperty);
+		state.setProperty(name, val || "");
+	}
+	
+	removeProperty(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Property",
+			"Are you sure you want to delete property "+name+"?",
+			(function() {this.doRemovePropertyState(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveProperty(name) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		state.removeProperty(name);
+		
+		document.getElementById('prop_'+name).remove();
+	}
+	handleProperty(e) {
+		let target = e.target;
+		if(target == null) return false;
+		if(target.tagName != "INPUT") return false;
+		
+		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
+		let stateType = this._animator._stateTypes[stateTypeId];
+		let state = stateType.states[stateId];
+		
+		let id = target.id, value = target.value;
+		id = id.replace(/prop_(.+?)_val/, "$1");
+		
+		if(id == 'offset') {
+			let o1 = document.getElementById('prop_offset_val1').value;
+			let o2 = document.getElementById('prop_offset_val2').value;
+			state.setProperty(id, [o1,o2]);
+		}
+		else state.setProperty(id, value);
+	}
+	addFrameProperty() {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		let properties = state.frameProperties;
+		let allowed = {offset: 'array', zLevel: 'number'};
+		
+		let options = "";
+		for(let i in allowed) {
+			if(!Object.hasOwn(properties, i) && document.getElementById('fprop_'+i) == null) options += "<option value=\""+i+"\">"+i+"</option>";
+		}
+		
+		Modal.confirm(
+			"Add Frame Property",
+			"Select frame property to add.<br><br><select class='modern large' id='fpropertyList'>"+options+"</select>",
+			(function() {
+				let value = document.getElementById('fpropertyList').value;
+				if(value != "" && value != null) {
+					this.checkAddFrameProperty(value);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"small",
+			false
+		);
+	}
+	checkAddFrameProperty(name = null) {
+		if(name == null) return;
+		
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		if(!Object.hasOwn({offset: 'array', zLevel: 'number'}, name)) {ToastModal.open("Invalid<br>frame property", true); return;}
+		
+		if(document.getElementById('fprop_'+name) != null) ToastModal.open("Frame Property<br>already set", true);
+		else this.doAddFrameProperty(name);
+	}
+	doAddFrameProperty(name, values = []) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		let varTypes = {offset: 'array', zLevel: 'number'};
+		let type = varTypes[name];
+		
+		let newFrameProperty = document.createElement('div');
+		newFrameProperty.classList.add('frameProperty');
+		newFrameProperty.id = "fprop_"+name;
+		newFrameProperty.dataset['param'] = name;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		label.innerText = name+":";
+		cell1.append(label);
+		newFrameProperty.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow');
+		let list = document.createElement('div');
+		list.classList.add('list');
+		let container = document.createElement('div');
+		list.append(container);
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = "No values defined.";
+		list.append(warning);
+		let controls = document.createElement('div');
+		controls.classList.add('non_sticky_controls');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.dataset['action'] = "addFramePropertyValue";
+		button.title = "Add new value\nfor this frame property";
+		button.innerText = "+";
+		controls.append(button);
+		list.append(controls);
+		cell2.append(list);
+		newFrameProperty.append(cell2);
+		
+		let cell3 = document.createElement('div');
+		cell3.classList.add('cell', 'controls', 'hover');
+		button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Frame Property";
+		button.dataset['action'] = "deleteFrameProperty";
+		cell3.append(button);
+		newFrameProperty.append(cell3);
+		
+		document.getElementById('frameProperties').append(newFrameProperty);
+		
+		for(let i = 0; i < values.length; i++) {
+			this.doAddFramePropertyValue(name, values[i], false);
+		}
+	}
+	
+	removeFrameProperty(elem) {
+		let name = elem.parentElement.parentElement.dataset['param'];
+		
+		Modal.confirm(
+			"Delete Frame Property",
+			"Are you sure you want to delete frame property "+name+"?",
+			(function() {this.doRemovePropertyState(name); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"small",
+			true
+		);
+	}
+	doRemoveFrameProperty(name) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		state.deleteFrameProperty(name);
+		
+		document.getElementById('fprop_'+name).remove();
+	}
+	addFramePropertyValue(elem) {
+		let name = elem.parentElement.parentElement.parentElement.parentElement.dataset['param']; //Button -> controls -> list -> cell -> frameProperty (with data)
+		let types = {offset: 'array', zLevel: 'number'};
+		let type = types[name] || false;
+		let input = "";
+		if(type == 'array') input = "<input id='frameValue' type='number' class='textfield split' step='0.25' title='Value X' placeholder='Value X' value='0' /><br><input id='frameValue2' type='number' class='textfield split' step='0.25' title='Value Y' placeholder='Value Y' value='0' />";
+		else input = "<input id='frameValue' type='number' class='textfield medium' step='1' min='0' title='Value' placeholder='Value' />";
+		
+		Modal.confirm(
+			"Add Frame Property Value",
+			"Enter value to add to frame property "+name+".<br><br>"+input,
+			(function() {
+				let value1 = document.getElementById('frameValue').value;
+				let value2 = (document.getElementById('frameValue2') || {}).value || null;
+				if(value1 != "" && value1 != null) {
+					if(type == 'array') this.doAddFramePropertyValue(name, [value1,value2]);
+					else this.doAddFramePropertyValue(name, value1);
+					return true;
+				}
+			}).bind(this),
+			null,
+			"Add",
+			"Abort",
+			"medium",
+			false
+		);
+	}
+	doAddFramePropertyValue(name, value, apply=true) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		if(apply) state.addFrameProperty(name, value);
+		
+		let container = document.getElementById('fprop_'+name).children[1].children[0].children[0];
+		if(container == null) return false;
+		let num = container.children.length;
+		
+		let newValue = document.createElement('div');
+		newValue.dataset['number'] = num;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell', 'grow');
+		let label = document.createElement('label');
+		label.classList.add('description');
+		if(Array.isArray(value)) label.innerText = value[0]+' | '+value[1];
+		else label.innerText = value;
+		cell1.append(label);
+		newValue.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'controls', 'hover');
+		let button = document.createElement('button');
+		button.classList.add('modern', 'tiny');
+		button.innerText = '-';
+		button.title = "Remove Frame Property Value";
+		button.dataset['action'] = "deleteFramePropertyValue";
+		cell2.append(button);
+		newValue.append(cell2);
+		
+		container.append(newValue);
+	}
+	removeFramePropertyValue(elem) {
+		let name = elem.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.dataset['param']; //Button -> cell -> value -> container -> list -> cell -> frameProperty (with data)
+		let num = parseInt(elem.parentElement.parentElement.dataset['number'])||0;
+		
+		Modal.confirm(
+			"Delete Frame Property Value",
+			"Are you sure you want to delete frame property value #"+(num+1)+"?",
+			(function() {this.doRemoveFramePropertyValue(name, num); return true;}).bind(this),
+			null,
+			"Delete",
+			"Abort",
+			"medium",
+			true
+		);
+	}
+	doRemoveFramePropertyValue(name, id) {
+		let partId = parseInt(this._content.children[0].dataset['partId'])||0;
+		let stateId = parseInt(this._content.children[0].dataset['partStateId'])||0;
+		let animId = parseInt(this._content.children[0].dataset['animStateId'])||0;
+		let state = IDManager.getById(animId);
+		
+		state.removeFrameProperty(name, id);
+		let container = document.getElementById('fprop_'+name).children[1].children[0].children[0]
+		let elem = container.children[id];
+		elem.remove();
+		
+		for(let i = 0; i < container.children; i++) {
+			container.children[i].dataset['number'] = i;
+		}
+	}
 }
 
 class StatesTab extends UITab {
@@ -615,7 +1771,7 @@ class StatesTab extends UITab {
 		this._content.innerHTML = "";
 		let template = document.getElementById('fragment_state').content;
 		let clone = document.importNode(template, true);
-		let stateType = animator._stateTypes[id];
+		let stateType = this._animator._stateTypes[id];
 		let state = stateType.states[refId];
 		
 		clone.children[0].dataset['stateTypeId'] = id;
@@ -750,7 +1906,7 @@ class StatesTab extends UITab {
 		if(isTaken) {
 			if(this._contentElem) {
 				let orgName = this._contentElem.children[id].dataset['name'];
-				this._poolsElem.children[id].children[1].innerText = orgName;
+				this._contentElem.children[id].children[1].innerText = orgName;
 			}
 			ToastModal.open("StateType name taken", true);
 		} else this.doRenameStateType(id, name);
@@ -1018,7 +2174,7 @@ class StatesTab extends UITab {
 			input.type = "number";
 			input.step = "0.01";
 			input.min = "0";
-			input.value = val || 0;
+			input.value = parseFloat(val) || 1;
 		} else {
 			input.type = "text";
 			input.value = val || "";
@@ -1041,6 +2197,7 @@ class StatesTab extends UITab {
 		newProperty.append(cell2);
 		
 		document.getElementById('properties').append(newProperty);
+		stateType.setProperty(name, val || "");
 	}
 	
 	removePropertyType(elem) {
@@ -1071,7 +2228,7 @@ class StatesTab extends UITab {
 		if(target.tagName != "INPUT") return false;
 		
 		let sid = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
-		let stateType = animator._stateTypes[sid];
+		let stateType = this._animator._stateTypes[sid];
 		
 		let id = target.id, value = target.value;
 		id = id.replace(/prop_(.+?)_val/, "$1");
@@ -1081,7 +2238,7 @@ class StatesTab extends UITab {
 	addPropertyState() {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		let properties = state.properties;
 		let allowed = State.allowedProperties();
@@ -1113,7 +2270,7 @@ class StatesTab extends UITab {
 		
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		if(!Object.hasOwn(State.allowedProperties(), name)) {ToastModal.open("Invalid property", true); return;}
@@ -1124,7 +2281,7 @@ class StatesTab extends UITab {
 	doAddPropertyState(name, val = null) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		let varTypes = State.allowedProperties();
 		let isNumber = !!varTypes[name];
@@ -1146,7 +2303,7 @@ class StatesTab extends UITab {
 			input.type = "number";
 			input.step = "0.01";
 			input.min = "0";
-			input.value = val || 0;
+			input.value = parseFloat(val)||1;
 		} else {
 			input.type = "text";
 			input.value = val || "";
@@ -1169,6 +2326,7 @@ class StatesTab extends UITab {
 		newProperty.append(cell2);
 		
 		document.getElementById('properties').append(newProperty);
+		state.setProperty(name, val || "");
 	}
 	
 	removePropertyState(elem) {
@@ -1188,7 +2346,7 @@ class StatesTab extends UITab {
 	doRemovePropertyState(name) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		state.removeProperty(name);
@@ -1202,7 +2360,7 @@ class StatesTab extends UITab {
 		
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		let id = target.id, value = target.value;
@@ -1213,7 +2371,7 @@ class StatesTab extends UITab {
 	addFrameProperty() {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		let properties = state.frameProperties;
 		let allowed = State.allowedFrameProperties();
@@ -1245,18 +2403,18 @@ class StatesTab extends UITab {
 		
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		if(!Object.hasOwn(State.allowedFrameProperties(), name)) {ToastModal.open("Invalid<br>frame property", true); return;}
 		
-		if(document.getElementById('prop_'+name) != null) ToastModal.open("Frame Property<br>already set", true);
+		if(document.getElementById('fprop_'+name) != null) ToastModal.open("Frame Property<br>already set", true);
 		else this.doAddFrameProperty(name);
 	}
 	doAddFrameProperty(name, values = []) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		let varTypes = State.allowedProperties();
 		let isNumber = !!varTypes[name];
@@ -1330,7 +2488,7 @@ class StatesTab extends UITab {
 	doRemoveFrameProperty(name) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		state.deleteFrameProperty(name);
@@ -1347,7 +2505,7 @@ class StatesTab extends UITab {
 			"Enter value to add to frame property "+name+".<br><br>"+input,
 			(function() {
 				let value = document.getElementById('frameValue').value;
-				if(value != "" && value != null) {
+				if(value != null && (value != "" || !isNumber)) {
 					this.doAddFramePropertyValue(name, value);
 					return true;
 				}
@@ -1362,7 +2520,7 @@ class StatesTab extends UITab {
 	doAddFramePropertyValue(name, value, apply=true) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		if(apply) state.addFrameProperty(name, value);
@@ -1378,7 +2536,7 @@ class StatesTab extends UITab {
 		cell1.classList.add('cell', 'grow');
 		let label = document.createElement('label');
 		label.classList.add('description');
-		label.innerText = value;
+		label.innerHTML = value == "" ? "<i>Empty String</i>" : value;
 		cell1.append(label);
 		newValue.append(cell1);
 		
@@ -1412,7 +2570,7 @@ class StatesTab extends UITab {
 	doRemoveFramePropertyValue(name, id) {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		state.removeFrameProperty(name, id);
@@ -1428,7 +2586,7 @@ class StatesTab extends UITab {
 	updateMode() {
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		let elem = document.getElementById('mode_content')
@@ -1468,7 +2626,7 @@ class StatesTab extends UITab {
 		
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		switch(id) {
@@ -1483,7 +2641,7 @@ class StatesTab extends UITab {
 		
 		let stateTypeId = parseInt(this._content.children[0].dataset['stateTypeId'])||0;
 		let stateId = parseInt(this._content.children[0].dataset['stateId'])||0;
-		let stateType = animator._stateTypes[stateTypeId];
+		let stateType = this._animator._stateTypes[stateTypeId];
 		let state = stateType.states[stateId];
 		
 		switch(id) {
@@ -1646,7 +2804,7 @@ class ParticlesTab extends UITab {
 		let id = target.id, value = target.value, checked = target.checked || false;
 		switch(id) {
 			case 'anchorpart':
-				this._animator._particleEmitters[eid].anchorPart = value;
+				this._animator._particleEmitters[eid].anchorPart = parseInt(value)||0;
 				break;
 			case 'type':
 				this._animator._particleEmitters[eid]._particles[pid].type = value;
@@ -1707,13 +2865,17 @@ class ParticlesTab extends UITab {
 		
 		let select = clone.getElementById('anchorpart');
 		let parts = [];
+		let partIds = {};
 		for(let i = 0; i < this._animator._parts.length; i++) {
-			parts.push(this._animator._parts[i].name);
+			let part = this._animator._parts[i]
+			parts.push(part.name);
+			partIds[part.name] = part.id;
 		}
 		parts.sort();
 		for(let i = 0; i < parts.length; i++) {
 			let option = document.createElement('option');
-			option.value = parts[i];
+			option.value = partIds[parts[i]];
+			if(emitter.anchorPart != null && emitter.anchorPart == partIds[parts[i]]) option.selected = true;
 			option.innerText = parts[i];
 			select.append(option);
 		}

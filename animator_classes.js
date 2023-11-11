@@ -2,22 +2,25 @@
 class IDManager {
 	static #_id = 0;
 	static #_registeredIDs = {};
+	static #_registeredIDCount = 0;
 	
 	static getId(ref) {
 		let id = IDManager.#_id++;
 		IDManager.#_registeredIDs[id] = ref;
+		IDManager.#_registeredIDCount++;
 		return id;
 	}
 	static freeId(id) {
 		id = parseInt(id) || 0;
 		delete IDManager.#_registeredIDs[id];
-		if(Object.keys(IDManager.#_registeredIDs).length <= 0) IDManager.resetIDs();
+		IDManager.#_registeredIDCount--;
+		if(IDManager.#_registeredIDCount <= 0) IDManager.resetIDs();
 	}
 	static resetIDs() {IDManager.#_id = 0; console.log("No more IDs registered - resetting index.");}
 	
 	static getById(id) {id = parseInt(id) || 0; return IDManager.#_registeredIDs[id];}
 	
-	static getStatistic() {return "Currently registered: "+Object.keys(IDManager.#_registeredIDs).length+" IDs. Highest index: "+IDManager.#_id;}
+	static getStatistic() {return "Currently registered: "+IDManager.#_registeredIDCount+" IDs. Highest index: "+IDManager.#_id;}
 }
 
 /**
