@@ -10,12 +10,13 @@ window.onError = function(msg, url, line, col, err) {
 	return true;
 }
 </script>
+<link rel="stylesheet" href="animator.css" />
+<script src="jsonpatch.js"></script>
 <script src="animator_classes.js"></script>
 <script src="animator.js"></script>
 <script src="ui.js"></script>
 <script src="misc.js"></script>
 <script src="defer.js" defer></script>
-<link rel="stylesheet" href="animator.css" />
 </head>
 <body>
 <div class="body" id="main">
@@ -108,6 +109,10 @@ window.onError = function(msg, url, line, col, err) {
 				<button id="newProjectButton" class="modern large" type="button" title="Start new&#10;empty project">New Project</button><br>
 				<button id="importButton" class="modern large" type="button" title="Import project from&#10; .animation file">Import</button><br>
 				<button id="exportButton" class="modern large" type="button" title="Save current project&#10;as new .animation file">Export</button>
+			</div>
+			<hr>
+			<div class="box">
+				<button id="patchImportButton" class="modern large" type="button" title="Import a .patch file&#10;to apply to the current project">Apply Patch</button>
 			</div>
 			<hr>
 			<div class="box">

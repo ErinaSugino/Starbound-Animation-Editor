@@ -296,6 +296,8 @@ keyHandler.registerKey('KeyI', keyboardImport, {shift: true});
 function keyboardNew(key) {Modal.confirm("New Project", "Do you really want to create a new project?<br><br>If data is already loaded it will be erased!", () => {animator.destroy(); return true;}, null, "Create", "Abort", "small", true);}
 keyHandler.registerKey('KeyN', keyboardNew, {shift: true});
 keyHandler.registerKey('KeyM', () => {document.getElementById('menu').classList.toggle('active');});
+function keyboardPatch(key) {if(!animator.hasElements()){ToastModal.open("Nothing to patch",true);return;}Modal.confirm("Patch Project","<div class='inputFile'><input type='file' class='fileInput' id='fileInput' required /><label for='fileInput'>Click or drop file here</label></div>",loadPatch,null,"Load","Cancle","small",false);}
+keyHandler.registerKey('KeyP', keyboardPatch, {shift: true});
 
 function getStorage(key) {
 	let storage = localStorage;
@@ -331,8 +333,9 @@ function loadFile() {
 	let modal = ToastModal.open("<span class='loading'>...</span>", false, 0);
 	file.text().then(function(d) {
 		data = d;
+		data = data.replace(/[\t ]*?\/\/.*?(?:\n|$)/g, "\n");
 		let json;
-		try{json = JSON.parse(d);} catch(e) {
+		try{json = JSON.parse(data);} catch(e) {
 			ToastModal.change(modal, "Invalid file", true, 5000);
 			console.error("Invalid JSON file:", e);
 			return;
@@ -352,6 +355,87 @@ function doLoadFile(json, id = null) {
 		if(id != null) ToastModal.change(id, "Errors: "+errors, false, 5000);
 		else ToastModal.open("Errors: "+errors);
 	}
+}
+
+function loadPatch() {
+	let source = animator.output();
+	if(source == null) {
+		ToastModal.open("Nothing to patch", true);
+		return;
+	}
+	
+	let elem = document.getElementById('fileInput');
+	if(elem == null) {
+		ToastModal.open("Loading error", true);
+		console.error("Couldn't find the input element. This shouldn't happen unless something got manipulated.");
+		return true;
+	}
+	
+	let file = elem.files[0] || null;
+	if(file == null) {
+		return true;
+	}
+	
+	let modal = ToastModal.open("<span class='loading'>...</span>", false, 0);
+	file.text().then(function(d) {
+		data = d;
+		data = data.replace(/[\t ]*?\/\/.*?(?:\n|$)/g, "\n");
+		let json;
+		try{json = JSON.parse(data);} catch(e) {
+			ToastModal.change(modal, "Invalid file", true, 5000);
+			console.error("Invalid JSON file:", e);
+			return;
+		}
+		parsedData = json;
+		
+		applyPatch(source, json, modal);
+	});
+	return true;
+}
+
+function applyPatch(source=null, patch=null, id=null) {
+	let isArray = Array.isArray || function(obj) { return "[object Array]" == Object.prototype.toString.call(obj) };
+	let handleToast = id==null ? function(a,b){ToastModal.open(a,b);} : function(a,b){ToastModal.change(id,a,b,5000);}
+	if (patch == null || !isArray(patch)) {handleToast("Error patching", true); return;}
+	if (patch.length == 0) {handleToast("No patch", true); return}
+	let after;
+	let errors = 0, applied = 0;
+	if (isArray(patch[0])) {
+		for (let i = 0; i < patch.length; i++) {
+			try {
+				let attempt = jsonpatch.apply_patch(source, patch[i]);
+				source = attempt;
+			}
+			catch(err) {
+				if(err.message.substr(0,8) != "Exists o") {
+					errors++;
+					console.error("Patch "+(i+1), err.message);
+				}
+			}
+			applied++;
+			after = source;
+		}
+	}
+	else {
+		try {after = jsonpatch.apply_patch(source, patch);}
+		catch(err) {
+			if(err.message.substr(0,8) != "Exists o") {
+				handleToast("Error patching", true);
+			} else {
+				handleToast("Nothing applied", false);
+			}
+			return;
+		}
+		applied++;
+	}
+	
+	if(errors > 0) {
+		if(errors == patch.length) {handleToast("Error patching", true); return;} //All failed - no need to apply
+		else handleToast("Done; Errors: "+errors, false);
+	} else if(applied == 0) {handleToast("Nothing applied", false); return;} //No test went through - nothing to apply
+	else handleToast("Patching successful", false);
+	
+	animator.load(after);
 }
 
 function doExport() {
@@ -392,7 +476,9 @@ function openHelp() {
 		"<b>Hotkeys:</b><br>"+
 		"<span class=\"highlight\">M</span> - Open sidebar menu<br>"+
 		"<span class=\"highlight\">Shift + I</span> - Import project<br>"+
-		"<span class=\"highlight\">Shift + N</span> - New project"
+		"<span class=\"highlight\">Shift + N</span> - New project<br>"+
+		"<span class=\"highlight\">Shift + P</span> - Apply Patch<br><br>"+
+		"Uses modified <a class=\"modern blue\" href=\"\">JSON Patch</a>"
 	);
 }
 
@@ -443,4 +529,21 @@ function startup() {
 	document.getElementById('compressionLevel').addEventListener('change', function(e) {
 		animator.compressionLevel = this.value;
 	});
+	document.getElementById('patchImportButton').addEventListener('click', (e) => {
+		if(!animator.hasElements()) {
+			ToastModal.open("Nothing to patch", true);
+			return;
+		}
+		
+		Modal.confirm(
+			"Patch Project",
+			"<div class='inputFile'><input type='file' class='fileInput' id='fileInput' required /><label for='fileInput'>Click or drop file here</label></div>",
+			loadPatch,
+			null,
+			"Load",
+			"Cancle",
+			"small",
+			false
+		);
+	})
 }

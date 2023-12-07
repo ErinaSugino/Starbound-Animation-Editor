@@ -174,6 +174,7 @@ class PreviewTab extends UITab {
 		
 		this._boundUpdatePreview = this.updatePreview.bind(this);
 		this._boundResetPreview = this.resetPreview.bind(this);
+		this._boundScrollLoad = this.scrollLoad.bind(this);
 		
 		if(elem.classList.contains('active')) this.onLoad();
 	}
@@ -191,11 +192,15 @@ class PreviewTab extends UITab {
 		if(!this._animator) return;
 		this.updatePreview();
 		
+		document.addEventListener('scroll', this._boundScrollLoad);
+		
 		animator.addEventListener('load', this._boundUpdatePreview);
 	}
 	onUnload() {
 		if(!this._active) return;
 		super.onUnload();
+		
+		document.removeEventListener('scroll', this._boundScrollLoad);
 		
 		animator.removeEventListener('load', this._boundUpdatePreview);
 		let parentElem = this._output.parentElement;
@@ -206,14 +211,45 @@ class PreviewTab extends UITab {
 		let result = this._animator.print(Animator.COMPRESSION_NONE);
 		this.resetPreview();
 		if(result == null) {this._output.innerText = "Project is empty."; this.#_isClean = false; return;}
-		//this._output.innerHTML = result;
-		
-		let fragment = document.createDocumentFragment();
 		
 		// Colorization
-		var lines = result.split("\n");
-		for(let i = 0; i < lines.length; i++) {
-			let line = lines[i];
+		let lines = result.split("\n");
+		this._currentList = lines;
+		for(let i = 0; i < lines.length; i+=100) {
+			let segment = document.createElement('div');
+			segment.classList.add('segment');
+			segment.style.setProperty('--line_count', Math.min(lines.length - i, 100));
+			this._output.append(segment);
+		}
+		
+		// Delay to next frame for anti-lag
+		window.requestAnimationFrame(this._boundScrollLoad);
+		
+		let highestIndex = String(lines.length).length;
+		let indentWidth = ''+(highestIndex*8)+'px';
+		this._output.style.setProperty('--indent_width', indentWidth);
+		
+		this.#_isClean = false;
+	}
+	
+	resetPreview() {
+		if(this.#_isClean) return;
+		this._output.remove();
+		this._output = document.createElement('pre');
+		this._anchor.appendChild(this._output);
+		this._currentList = null;
+		this.#_isClean = true;
+	}
+	
+	stylizeBlock(i=0,n=100,o=0) {
+		if(!this._currentList || this._currentList.length == 0) return;
+		// i = start index array, n = number of entries from array, o = offset segment
+		i = Math.max(parseInt(i)||0,0);
+		n = Math.max(parseInt(n)||0,0) + i;
+		o = Math.max(parseInt(o)||0,0)
+		let fragment = document.createDocumentFragment();
+		for(true; i < n && i < this._currentList.length; i++) {
+			let line = this._currentList[i];
 			let matches = line.match(/^(\s*)("[\w-]+": ?)?("[^"]*"|[\w.+-]*)?([[{}\]]*,?)?$/m);
 			let result = document.createElement('label');
 			result.classList.add('line');
@@ -237,21 +273,63 @@ class PreviewTab extends UITab {
 			if(matches[4]) result.append(matches[4]);
 			fragment.append(result);
 		}
-		
-		this._output.append(fragment);
-		
-		let highestIndex = String(this._output.children.length).length;
-		let indentWidth = ''+(highestIndex*8)+'px';
-		this._output.style.setProperty('--indent_width', indentWidth);
-		
-		this.#_isClean = false;
+		this._output.children[o].append(fragment);
+		let actHeight = this._output.children[o].offsetHeight;
+		let overflow = (actHeight - 1500);
+		overflow = overflow == 0 ? 0 : overflow / 15;
+		this._output.children[o].style.setProperty('--overflowing_lines', overflow);
 	}
 	
-	resetPreview() {
-		if(this.#_isClean) return;
-		this._output.remove();
-		this._output = document.createElement('pre');
-		this._anchor.appendChild(this._output);
+	scrollLoad(e) {
+		let start = 0, end = 0;
+		let isIn = false;
+		let vh = window.innerHeight;
+		let o = window.scrollY;
+		for(let i = Math.floor(o==0?0:o/2000); i < this._output.children.length; i++) { // Begin check higher based on offset. 2000px instead of 1500px to have conservative overflow wiggleroom
+			let elem = this._output.children[i];
+			let rect = elem.getBoundingClientRect();
+			if(isIn) {
+				if(rect.bottom < -50 || rect.top > vh + 50) {
+					// Bottom further than 50 pixels out top or top further than 50 pixels out bottom. Consider invisible.
+					isIn = false;
+					end = i;
+					break;
+				}
+			} else {
+				if(rect.bottom >= -50 && rect.top <= vh + 50) {
+					// Bottom is nearly visible top or top nearly visible on bottom. Consider visible.
+					isIn = true;
+					start = i;
+				}
+			}
+		}
+		
+		let unloadStart = start - 2, unloadEnd = end + 2;
+		// Load currently visible if not loaded.
+		for(let i = start; i <= end && i < this._output.children.length; i++) {
+			let elem = this._output.children[i];
+			if(elem.children.length > 0) continue;
+			this.stylizeBlock(100*(start+1), 100, i);
+		}
+		// Unload everything outside the boundaries
+		if(unloadStart >= 0) {
+			for(let i = unloadStart; i >= 0; i--) {
+				this._output.children[i].innerText = "";
+			}
+		}
+		if(unloadEnd < this._output.children.length) {
+			for(let i = unloadEnd; i < this._output.children.length; i++) {
+				this._output.children[i].innerText = "";
+			}
+		}
+		
+		let offset = 0;
+		for(let i = start; i >= 0; i--) {
+			if(this._output.children[i].children.length > 0) continue;
+			offset = (i+1) * 100;
+			break;
+		}
+		this._output.style.setProperty('--counter_offset', offset);
 	}
 }
 

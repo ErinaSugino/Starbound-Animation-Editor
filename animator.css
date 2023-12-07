@@ -181,14 +181,21 @@ pre {
 	background: transparent;
 	background-image: linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,0.1) 50%);
 	background-repeat: repeat;
-	background-size: 100% 30px;
+	background-size: 100% calc(var(--font_height, 15px) * 2);
 	margin: 0;
-	tab-size: 4;
-	counter-reset: line;
-	--indent-width: 25px;
+	tab-size: 2;
+	counter-reset: line var(--counter_offset, 0);
+	--indent_width: 25px;
+	--font_height: 15px;
 }
 div.body.dark pre {background-image: linear-gradient(rgba(255,255,255,0) 50%, rgba(255,255,255,0.1) 50%);}
-pre > .line {
+pre > .segment {
+	display: block;
+	min-height: calc(calc(var(--font_height, 15px) * 100) + calc(var(--overflowing_lines, 0) * var(--font_height, 15px)));
+	overflow-y: hidden;
+}
+pre > .segment:nth-last-of-type(1) {min-height: calc(var(--line_count, 0) * var(--font_height, 15px));}
+pre .line {
 	display: block;
 	width: 100%;
 	counter-increment: line;
@@ -196,7 +203,7 @@ pre > .line {
 	padding-left: var(--indent_width);
 	position: relative;
 }
-pre > .line:before {
+pre .line:before {
 	content: counter(line);
 	position: absolute;
 	top: 0px;
@@ -205,10 +212,11 @@ pre > .line:before {
 	width: var(--indent_width);
 	color: var(--bg_color_placeh);
 }
-pre > .line > span {
-	line-break: anywhere;
+pre .line > span {
+	line-break: auto;
 	word-break: break-word;
 	overflow-wrap: anywhere;
+	white-space: break-spaces;
 }
 
 div.fileInput {display: inline-block; position: relative;}
