@@ -2,6 +2,7 @@
 class UI {
 	constructor() {
 		this._tabs = {};
+		this._settings = {};
 		
 		let allTabs = document.querySelectorAll('.tab[id]');
 		for(let i = 0; i < allTabs.length; i++) {
@@ -12,13 +13,13 @@ class UI {
 			if(id == "") continue;
 			if(this._tabs[id]) {console.warn("Duplicate ID in UI tabs!", id); continue;}
 			switch(id) {
-				case 'tags': instance = new TagsTab(elem); break;
-				case 'parts': instance = new PartsTab(elem); break;
-				case 'states': instance = new StatesTab(elem); break;
-				case 'particles': instance = new ParticlesTab(elem); break;
-				case 'groups': instance = new GroupsTab(elem); break;
-				case 'sounds': instance = new SoundsTab(elem); break;
-				case 'preview': instance = new PreviewTab(elem); break;
+				case 'tags': instance = new TagsTab(elem, this); break;
+				case 'parts': instance = new PartsTab(elem, this); break;
+				case 'states': instance = new StatesTab(elem, this); break;
+				case 'particles': instance = new ParticlesTab(elem, this); break;
+				case 'groups': instance = new GroupsTab(elem, this); break;
+				case 'sounds': instance = new SoundsTab(elem, this); break;
+				case 'preview': instance = new PreviewTab(elem, this); break;
 				default: continue; break;
 			}
 			
@@ -63,11 +64,21 @@ class UI {
 			catch(e) {console.error("Error in "+forId+"'s onLoad handler", e);}
 		}
 	}
+	
+	setSetting(name, value) {
+		this._settings[name] = value;
+	}
+	
+	getSetting(name, defaultValue) {
+		return Object.hasOwn(this._settings, name) ? this._settings[name] : defaultValue;
+	}
 }
 
 class UITab {
-	constructor(elem) {
+	constructor(elem, parent) {
 		if(new.target === UITab) throw TypeError("Trying to instantiate abstract class UITab");
+		
+		this._parent = parent;
 		
 		this._tab = elem;
 		this._navbar = elem.children[0];
@@ -82,6 +93,7 @@ class UITab {
 	
 	destroy() {
 		this._navbar.removeEventListener('click', this._boundHandleNavigation);
+		this._parent = null;
 	}
 	
 	get tab() {return this._tab;}
@@ -164,17 +176,20 @@ class UITab {
 class PreviewTab extends UITab {
 	#_isClean = true;
 	
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		
 		this._animator = animator;
 		this._output = this._content.querySelector('pre');
 		this._anchor = this._output.parentElement;
 		if(this._output.innerHTML != "") this.#_isClean = false;
 		
+		this._wasFull = false;
+		
 		this._boundUpdatePreview = this.updatePreview.bind(this);
 		this._boundResetPreview = this.resetPreview.bind(this);
 		this._boundScrollLoad = this.scrollLoad.bind(this);
+		this._boundDynamicLoad = this.dynamicLoad.bind(this);
 		
 		if(elem.classList.contains('active')) this.onLoad();
 	}
@@ -192,7 +207,9 @@ class PreviewTab extends UITab {
 		if(!this._animator) return;
 		this.updatePreview();
 		
-		document.addEventListener('scroll', this._boundScrollLoad);
+		this._wasFull = this._parent.getSetting('fullPreview', false);
+		
+		if(!this._wasFull) document.addEventListener('scroll', this._boundScrollLoad);
 		
 		animator.addEventListener('load', this._boundUpdatePreview);
 	}
@@ -222,14 +239,33 @@ class PreviewTab extends UITab {
 			this._output.append(segment);
 		}
 		
+		this._wasFull = this._parent.getSetting('fullPreview', false);
 		// Delay to next frame for anti-lag
-		window.requestAnimationFrame(this._boundScrollLoad);
+		if(this._wasFull) {
+			let modalId = ToastModal.open("<span class='loading'>...</span>", false, 0);
+			window.requestAnimationFrame((e) => {this._boundDynamicLoad(0,100,0,modalId)});
+		} else window.requestAnimationFrame(this._boundScrollLoad);
 		
 		let highestIndex = String(lines.length).length;
 		let indentWidth = ''+(highestIndex*8)+'px';
 		this._output.style.setProperty('--indent_width', indentWidth);
 		
 		this.#_isClean = false;
+	}
+	
+	softUpdatePreview() {
+		let full = this._parent.getSetting('fullPreview', false);
+		if(full == this._wasFull) return;
+		if(full) {
+			document.removeEventListener('scroll', this._boundScrollLoad);
+			let modalId = ToastModal.open("<span class='loading'>...</span>", false, 0);
+			this._output.style.setProperty('--counter_offset', '0');
+			window.requestAnimationFrame((e) => {this._boundDynamicLoad(0,100,0,modalId)});
+		} else {
+			document.addEventListener('scroll', this._boundScrollLoad);
+			window.requestAnimationFrame(this._boundScrollLoad);
+		}
+		this._wasFull = full;
 	}
 	
 	resetPreview() {
@@ -331,11 +367,35 @@ class PreviewTab extends UITab {
 		}
 		this._output.style.setProperty('--counter_offset', offset);
 	}
+	
+	dynamicLoad(i=0,n=100,o=0,modalId=null) {
+		i = Math.max(parseInt(i)||0,0);
+		o = Math.max(parseInt(o)||0,0);
+		// i = start index string, n = chunk size, j = segment offset
+		
+		let handleToast = modalId==null ? function(){} : function(){ToastModal.change(modalId,null,null,1);}
+		
+		let elem = this._output.children[o];
+		if(!elem) {handleToast(); return;}
+		if(!this._currentList[i]) {handleToast(); return;}
+		
+		while(elem.children.length > 0) {
+			// Skip already populated segments this tick
+			o++;
+			i += n;
+			elem = this._output.children[o];
+			if(!elem) {handleToast(); return;}
+			if(!this._currentList[i]) {handleToast(); return;}
+		}
+		
+		this.stylizeBlock(i,n,o); // Load current block
+		window.requestAnimationFrame((e) => {this._boundDynamicLoad(i+n,n,++o,modalId)}); // Next tick, load next block
+	}
 }
 
 class TagsTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);
@@ -524,8 +584,8 @@ class TagsTab extends UITab {
 }
 
 class PartsTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);
@@ -578,7 +638,9 @@ class PartsTab extends UITab {
 		
 		if(target.tagName == "BUTTON") {
 			let action = target.dataset['action'];
-			if(action == "addPart") this.addPart(target);
+			if(action == "zEdit") this.addNavigationLayer("Z-Editor", {layer: 0});
+			else if(action == "zEditReload") this.buildLayeredContent(this._nests[this._nests.length-1].data);
+			else if(action == "addPart") this.addPart(target);
 			else if(action == "editPart") this.openPart(target);
 			else if(action == "deletePart") this.removePart(target);
 			else if(action == "addGroup") this.addGroup(target);
@@ -656,6 +718,7 @@ class PartsTab extends UITab {
 		this._contentList = [];
 		
 		if(data == null) this.loadList();
+		else if(data.layer == 0) this.loadListZEdit();
 		else if(data.layer == 1) this.loadPart(data.id);
 		else if(data.layer == 2) this.loadPartState(data.id, data.refId);
 		else if(data.layer == 3) this.loadAnimationState(data.id, data.refId, data.subId);
@@ -675,6 +738,13 @@ class PartsTab extends UITab {
 		controls.classList.add('sticky_controls');
 		let button = document.createElement('button');
 		button.type = 'button';
+		button.classList.add('modern', 'small');
+		button.title = "Quickly adjust\nz-levels of parts";
+		button.innerText = 'Z-Editor';
+		button.dataset['action'] = 'zEdit';
+		controls.append(button);
+		button = document.createElement('button');
+		button.type = 'button';
 		button.classList.add('modern', 'tiny');
 		button.title = "Add new\npart";
 		button.innerText = '+';
@@ -684,6 +754,39 @@ class PartsTab extends UITab {
 		
 		for(let i = 0; i < this._animator._parts.length; i++) {
 			this.doAddPart(this._animator._parts[i].name, i);
+		}
+	}
+	loadListZEdit() {
+		this._contentElem = document.createElement('div');
+		this._contentElem.classList.add('parts');
+		this._content.append(this._contentElem);
+		
+		let warning = document.createElement('div');
+		warning.classList.add('warning');
+		warning.innerText = 'No parts defined.';
+		this._content.append(warning);
+		
+		let controls = document.createElement('div');
+		controls.classList.add('sticky_controls');
+		let button = document.createElement('button');
+		button.type = 'button';
+		button.classList.add('modern', 'small');
+		button.title = "Reload\nZ-Levels";
+		button.innerText = 'Reload';
+		button.dataset['action'] = 'zEditReload';
+		controls.append(button);
+		button = document.createElement('button');
+		button.type = 'button';
+		button.classList.add('modern', 'tiny');
+		button.title = "Add new\npart";
+		button.innerText = '+';
+		button.dataset['action'] = 'addPart';
+		controls.append(button);
+		this._content.append(controls);
+		
+		let list = this.getSortedList();
+		for(let i = 0; i < list.length; i++) {
+			this.doAddPartZEdit(list[i]);
 		}
 	}
 	openPart(elem) {
@@ -1681,11 +1784,58 @@ class PartsTab extends UITab {
 			container.children[i].dataset['number'] = i;
 		}
 	}
+	
+	getSortedList() {
+		let list = [...this._animator._parts];
+		list.sort((a,b) => {return (b.zLevel||0) - (a.zLevel||0);});
+		return list;
+	}
+	
+	doAddPartZEdit(part) {
+		let newPart = document.createElement('div');
+		newPart.classList.add('part');
+		newPart.dataset['name'] = part.name;
+		newPart.dataset['id'] = part.id;
+		
+		let cell1 = document.createElement('div');
+		cell1.classList.add('cell');
+		cell1.innerText = part.name;
+		newPart.append(cell1);
+		
+		let cell2 = document.createElement('div');
+		cell2.classList.add('cell', 'grow', 'right');
+		cell2.innerHTML = "<span>zLevel: </span>";
+		let input = document.createElement('input');
+		input.classList.add('textfield', 'tiny');
+		input.type = 'number';
+		input.min = '1';
+		input.max = '999';
+		input.step = '1';
+		input.title = "zLevel of part\n"+part.name;
+		input.placeholder = 'None';
+		input.value = part.zLevel;
+		input.addEventListener('blur', this.handleZChange.bind(this));
+		cell2.append(input);
+		newPart.append(cell2);
+		
+		this._contentElem.append(newPart);
+	}
+	
+	handleZChange(e) {
+		let elem = e.target;
+		let value = elem.value;
+		value = value=='' ? null : parseInt(value)||1;
+		
+		let partId = parseInt(elem.parentElement.parentElement.dataset['id'])||0;
+		let part = IDManager.getById(partId);
+		
+		part.zLevel = value;
+	}
 }
 
 class StatesTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);
@@ -2731,8 +2881,8 @@ class StatesTab extends UITab {
 }
 
 class ParticlesTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);
@@ -3449,8 +3599,8 @@ class ParticlesTab extends UITab {
 }
 
 class GroupsTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);
@@ -3679,8 +3829,8 @@ class GroupsTab extends UITab {
 }
 
 class SoundsTab extends UITab {
-	constructor(elem) {
-		super(elem);
+	constructor(elem, parent) {
+		super(elem, parent);
 		this._animator = animator;
 		
 		this._boundHandleAction = this.handleAction.bind(this);

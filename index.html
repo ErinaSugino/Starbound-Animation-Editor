@@ -121,6 +121,11 @@ window.onError = function(msg, url, line, col, err) {
 					<option value="0" title="Human readable&#10;pretty print">Pretty</option>
 					<option value="1" title="Human readable with&#10;minified parts">Optimized</option>
 					<option value="2" title="Minified JSON without&#10;white-spaces">Production</option>
+				</select><br>
+				<label class="title">Preview Mode</label>
+				<select class="modern large" id="previewLoadMode" title="Way the preview&#10;tab renders results">
+					<option value="0" title="Only loads elements&#10;that are visible">Performance</option>
+					<option value="1" title="Loads all elements&#10;For CTRL+F search">Full (Search)</option>
 				</select>
 			</div>
 		</div>

@@ -327,7 +327,7 @@
   _operationRequired = {
     add: ['value'],
     replace: ['value'],
-    test: ['value'],
+    test: [],
     remove: [],
     move: ['from'],
     copy: ['from']

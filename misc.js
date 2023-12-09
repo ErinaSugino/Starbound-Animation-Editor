@@ -490,6 +490,7 @@ var downloadFile = null;
 function startup() {
 	animator = new Animator();
 	ui = new UI();
+	ui.setSetting('fullPreview', false);
 	
 	if(document.getElementById('main').classList.contains('dark')) document.getElementById('darkmode').checked = true;
 	document.getElementById('darkmode').addEventListener('change', switchDarkMode);
@@ -526,9 +527,6 @@ function startup() {
 			false
 		);
 	});
-	document.getElementById('compressionLevel').addEventListener('change', function(e) {
-		animator.compressionLevel = this.value;
-	});
 	document.getElementById('patchImportButton').addEventListener('click', (e) => {
 		if(!animator.hasElements()) {
 			ToastModal.open("Nothing to patch", true);
@@ -545,5 +543,12 @@ function startup() {
 			"small",
 			false
 		);
-	})
+	});
+	document.getElementById('compressionLevel').addEventListener('change', function(e) {
+		animator.compressionLevel = this.value;
+	});
+	document.getElementById('previewLoadMode').addEventListener('change', function(e) {
+		ui.setSetting('fullPreview', !!(parseInt(this.value)||0));
+		ui._tabs.preview.softUpdatePreview();
+	});
 }

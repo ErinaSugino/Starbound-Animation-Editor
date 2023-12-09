@@ -164,8 +164,9 @@ button.modern:hover, button.modern:active {background-color: var(--bg_color_hove
 div.sidebar button.modern:hover, div.sidebar button.modern:active {background-color: var(--bg_color_menu_hover);}
 button.modern:active {box-shadow: inset 0 0 4px white;}
 button.modern:disabled {color: var(--bg_color_disab); pointer-events: none; font-style: italic;}
-button.tiny {width: 24px; height: 24px; font-size: 14px; /*line-height: 20px;*/}
+button.tiny {width: 24px; height: 24px; font-size: 14px;}
 button.tiny:nth-of-type(n+2) {margin-left: 15px;}
+button.small {height: 24px; width: 75px; font-size: 14px;}
 button.normal {width: 150px; height: 30px; margin: 0px 5px;}
 button.large {width: 100%; height: 30px;}
 button.large:nth-child(n+2) {border-top: none;}
